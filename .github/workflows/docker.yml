@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - develop
-      - main
+#      - main
     tags:
       - "*.*.*"
     
@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        image: [edge, backend, ui-edge, ui-backend]
+        image: [edge, backend]
         include:
           - image: edge
             dockerfile: tools/docker/edge/Dockerfile
@@ -23,12 +23,12 @@ jobs:
           - image: ui-edge
             dockerfile: tools/docker/ui/Dockerfile
             args: "VERSION=openems,openems-edge-docker"
-          - image: backend
-            dockerfile: tools/docker/backend/Dockerfile
-            args: ""
-          - image: ui-backend
-            dockerfile: tools/docker/ui/Dockerfile
-            args: "VERSION=openems,openems-backend-docker"
+#          - image: backend
+#            dockerfile: tools/docker/backend/Dockerfile
+#            args: ""
+#          - image: ui-backend
+#            dockerfile: tools/docker/ui/Dockerfile
+#            args: "VERSION=openems,openems-backend-docker"
     permissions:
         packages: write
         contents: read
@@ -49,26 +49,25 @@ jobs:
           REF_NAME=$(echo "${{ github.ref }}" | sed -e 's/refs\/heads\///' -e 's/refs\/tags\///' -e 's/release\/v//')
           echo "branch=${REF_NAME}-test" >> "$GITHUB_OUTPUT"
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Login to Docker Hub
+#        uses: docker/login-action@v3
+#        with:
+#          username: ${{ secrets.DOCKERHUB_USERNAME }}
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.REPOSITORY_OWNER }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.REGISTRY }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            openems/${{ matrix.image }}
-            ghcr.io/openems/${{ matrix.image }}
+            ${{ env.REGISTRY }}/${{ matrix.image }}
           labels: |
             org.opencontainers.image.authors=OpenEMS
             org.opencontainers.image.title=OpenEMS ${{ matrix.image }}
@@ -82,7 +81,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64, linux/arm64
+          platforms: linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

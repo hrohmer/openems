@@ -58,7 +58,7 @@ jobs:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io/hrohmer
           username: ${{ github.actor }}
           password: ${{ secrets.REGISTRY }}
 
@@ -67,7 +67,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY }}/${{ matrix.image }}
+            ghcr.io/hrohmer/${{ matrix.image }}
           labels: |
             org.opencontainers.image.authors=OpenEMS
             org.opencontainers.image.title=OpenEMS ${{ matrix.image }}

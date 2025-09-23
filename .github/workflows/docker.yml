@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        image: [edge, ui-edge]
+        image: [edge]
         include:
           - image: edge
             dockerfile: tools/docker/edge/Dockerfile

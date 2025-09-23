@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        image: [edge, backend]
+        image: [edge, ui-edge]
         include:
           - image: edge
             dockerfile: tools/docker/edge/Dockerfile
@@ -80,7 +80,6 @@ jobs:
       - name: Build and push Docker images
         uses: docker/build-push-action@v6
         with:
-          context: .
           file: ${{ matrix.dockerfile }}
           platforms: linux/arm64
           push: true

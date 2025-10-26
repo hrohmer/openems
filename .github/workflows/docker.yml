@@ -80,9 +80,4 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-<<<<<<< HEAD
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.args }}          
-=======
-          labels: ${{ steps.meta.outputs.labels }}
->>>>>>> openems/develop

@@ -140,6 +140,12 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 
 			this.prices.set(processPrices(this.componentManager.getClock(), parsedPrices, exchangeRate, gridFees));
 
+			if (this.prices.get().isEmpty()) {
+				this.channel(TouEntsoe.ChannelId.CURRENT_PRICE).setNextValue(Double.NaN);
+			} else {
+				this.channel(TouEntsoe.ChannelId.CURRENT_PRICE).setNextValue(this.prices.get().getFirst());
+			}
+			
 		} catch (IOException | ParserConfigurationException | SAXException e) {
 			this.logWarn(this.log, "Unable to Update Entsoe Time-Of-Use Price: " + e.getMessage());
 			e.printStackTrace();

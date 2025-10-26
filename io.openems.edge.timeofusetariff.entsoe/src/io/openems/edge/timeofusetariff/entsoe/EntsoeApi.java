@@ -59,6 +59,10 @@ public class EntsoeApi {
 								      <attributeValue>%s</attributeValue>
 								   </AttributeInstanceComponent>
 								   <AttributeInstanceComponent>
+							          <attribute>ClassificationSequence_AttributeInstanceComponent.Position</attribute>
+							          <attributeValue>1</attributeValue>
+								   </AttributeInstanceComponent>
+								   <AttributeInstanceComponent>
 								      <attribute>TimeInterval</attribute>
 								      <attributeValue>%s/%s</attributeValue>
 								   </AttributeInstanceComponent>

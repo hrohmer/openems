@@ -1,0 +1,11 @@
+= ABB Terra AC Charging Station
+
+This component implements the ABB Terra AC charging station. It collects all relevant information into the given Nature Channels and its own Channels and sends charging commands that have been set by another controllers.
+
+=== Technical Data
+
+Implemented Natures:
+* Evcs (Electric Vehicle Charging Station)
+* ManagedEvcs
+* https://library.e.abb.com/public/6a169b3d17bb4cb0beb55f9516353e56/Terra%20AC%20User%20manual%20BCM.V3Y00.0-EN%20V004.pdf[User Manual Terra AC Wallbox]
+* https://library.e.abb.com/public/982c2befa2734d259e66d76fa4a7ba77/ABB_Terra_AC_Charger_ModbusCommunication_v1.11.pdf[TAC Modbus Communication]

@@ -6,9 +6,10 @@ import io.openems.common.channel.Unit;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
-import io.openems.edge.bridge.modbus.api.element.SignedQuadruplewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
+import io.openems.edge.bridge.modbus.api.element.UnsignedQuadruplewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
+import io.openems.edge.bridge.modbus.api.element.WordOrder;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.component.OpenemsComponent;
 
@@ -31,7 +32,7 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		
 		// see Chapter 5.1 Serial Number
-		SERIAL_NUMBER_BLOCK(Doc.of(OpenemsType.LONG).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The serial number"), new SignedQuadruplewordElement(DEVICE_START_ADDRESS | 0x0000), ElementToChannelConverter.DIRECT_1_TO_1 ),
+		SERIAL_NUMBER_BLOCK(Doc.of(OpenemsType.LONG).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The serial number block"), new UnsignedQuadruplewordElement(DEVICE_START_ADDRESS | 0x0000).wordOrder(WordOrder.MSWLSW), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		SERIAL_NUMBER(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The serial number"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0000), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		PRODUCTION_DATE_YEAR(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_ONLY).text("The production year"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), null ),
 		PRODUCTION_DATE_WEEK(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_ONLY).text("The production week of year"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), null ),

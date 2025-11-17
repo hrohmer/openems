@@ -3,6 +3,9 @@ package io.openems.edge.evcs.abb.terraac;
 import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUTE_WRITE;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
 
+import java.nio.ByteBuffer;
+import java.util.HexFormat;
+
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
@@ -20,6 +23,8 @@ import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.ghgande.j2mod.modbus.procimg.Register;
+
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
@@ -27,11 +32,13 @@ import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
+import io.openems.edge.bridge.modbus.api.element.AbstractModbusElement;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
+import io.openems.edge.bridge.modbus.api.task.Task;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
@@ -107,6 +114,12 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		 * the fixed hardware limit and the phases used for charging
 		 */
 		Evcs.addCalculatePowerLimitListeners(this);
+		
+		/*
+		 * Read the serial number block once
+		 */
+		getModbusProtocol().addTask(new FC3ReadRegistersTask(0x4000, Priority.HIGH, //
+				getSerialNumberModbusRegsiterElement()));
 	}
 
 	@Deactivate
@@ -124,6 +137,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		}
 	}
 
+	
 	private void applyConfig(Config config) {
 		this.config = config;
 		this._setChargingType(ChargingType.AC);
@@ -269,25 +283,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 	private FC3ReadRegistersTask getDeviceInformationTask() {
 		return new FC3ReadRegistersTask(0x4000, Priority.LOW, //
-				this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER_BLOCK).onUpdateCallback(value -> {
-					if (value == null) {
-						this.channel(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).setNextValue(null);
-						this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR).setNextValue(null);
-						this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK).setNextValue(null);
-						this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER).setNextValue(null);
-						this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE).setNextValue(null);
-					} else {
-						final Long serialNumber = Long.class.cast(value);
-						logger.warn("SerialNumberBLock: {}", Long.toHexString(serialNumber));
-						this.channel(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).setNextValue(Long.valueOf(serialNumber.longValue() & 0x000000000000FFFF).intValue());
-						this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR)
-							.setNextValue((serialNumber.longValue() >> 16) & 0xFF);
-						this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK)
-							.setNextValue((serialNumber.longValue() >> 24) & 0xFF);
-						this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER).setNextValue((serialNumber.longValue() >> 48) & 0xFF);
-						this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE).setNextValue((serialNumber.longValue() >> 56) & 0xFF);
-					}
-				}), //
+				getSerialNumberModbusRegsiterElement(), //
 				this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION) //
 		);
 	}
@@ -342,6 +338,28 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0107, DEVICE_START_ADDRESS | 0x0108), //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT)
 		);
+	}
+
+	private AbstractModbusElement<?, ?, ?> getSerialNumberModbusRegsiterElement() {
+		return this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER_BLOCK).onUpdateCallback(value -> {
+			if (value == null) {
+				this.channel(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).setNextValue(null);
+				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR).setNextValue(null);
+				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK).setNextValue(null);
+				this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER).setNextValue(null);
+				this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE).setNextValue(null);
+			} else {
+				final Long serialNumber = Long.class.cast(value);
+				logger.warn("SerialNumberBLock: 0x{}", HexFormat.of().formatHex(ByteBuffer.allocate(Long.BYTES).putLong(serialNumber).array()));
+				this.channel(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).setNextValue(Long.valueOf(serialNumber.longValue() & 0x000000000000FFFF).intValue());
+				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR)
+					.setNextValue((serialNumber.longValue() >> 16) & 0xFF);
+				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK)
+					.setNextValue((serialNumber.longValue() >> 24) & 0xFF);
+				this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER).setNextValue((serialNumber.longValue() >> 48) & 0xFF);
+				this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE).setNextValue((serialNumber.longValue() >> 56) & 0xFF);
+			}
+		});
 	}
 
 	/**

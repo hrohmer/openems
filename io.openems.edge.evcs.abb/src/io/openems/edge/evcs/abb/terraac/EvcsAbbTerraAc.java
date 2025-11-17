@@ -80,19 +80,5 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 		public ElementToChannelConverter converter() {
 			return converter;
 		}
-
-		
-	}
-	
-	public static ElementToChannelConverter catSingleWord() {
-		return new ElementToChannelConverter(
-			// element -> channel
-			value -> {
-				return value != null ? ((int)value) & 0x0000FFFF : null;
-			},
-			// channel -> element
-			value -> {
-				return value != null ? ((int)value) & 0x0000FFFF : null;
-			});
 	}
 }

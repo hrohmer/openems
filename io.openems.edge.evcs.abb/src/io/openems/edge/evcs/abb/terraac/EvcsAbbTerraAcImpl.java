@@ -23,8 +23,6 @@ import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.ghgande.j2mod.modbus.procimg.Register;
-
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
@@ -38,7 +36,6 @@ import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
-import io.openems.edge.bridge.modbus.api.task.Task;
 import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
@@ -184,16 +181,16 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		
 		int currentForLoad = 0;
 		
-		final ConnectorType type = getConnectorType().getNextValue().orElse(ConnectorType.CHANNEL_ERROR);
+		final ConnectorType type = getConnectorType().value().asEnum();
 		if (this.config.readOnly()) {
 			applyDisplayText("This EVCS is in readonly mode");
 		
 		} else if (( type == ConnectorType.TYPE_2_S || type == ConnectorType.TYPE_2_T) && 
-				getLockState().getNextValue().orElse(LockState.CHANNEL_ERROR) != LockState.CABLE_CONNECTED_CHARGING_STATION_LOCKED_ELECTRIC_VEHICLE) {
-			applyDisplayText("Socket connection not ready: " + getLockState().getNextValue().get().getName());
+				getLockState().value().asEnum() != LockState.CABLE_CONNECTED_CHARGING_STATION_LOCKED_ELECTRIC_VEHICLE) {
+			applyDisplayText("Socket connection not ready: " + getLockState().value().asEnum().getName());
 			
-		} else if (getErrorChannel().getNextValue().orElse(ErrorCodes.CHANNEL_ERROR) != ErrorCodes.NONE) {
-			applyDisplayText(getErrorChannel().getNextValue().get().getName());
+		} else if (getErrorChannel().value().asEnum() != ErrorCodes.NONE) {
+			applyDisplayText(getErrorChannel().value().asEnum().getName());
 			
 		} else {
 			

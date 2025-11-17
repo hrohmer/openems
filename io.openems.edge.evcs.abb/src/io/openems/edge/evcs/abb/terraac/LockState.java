@@ -19,6 +19,10 @@ public enum LockState implements OptionsEnum {
 			"Cable is connected to the charging station and the electric vehicle, unlocked in charging station"),
 	CABLE_CONNECTED_CHARGING_STATION_LOCKED_ELECTRIC_VEHICLE(0x0111,
 			"Cable is connected to the charging station and the electric vehicle, locked in charging station"),
+	/*
+	 * Internal Lock state if channel has an error or is not ready
+	 */
+	CHANNEL_ERROR(0xFFFF, "Channel error or not ready"),
 	;
 	
 	private final int state;

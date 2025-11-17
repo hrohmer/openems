@@ -32,10 +32,10 @@ public class EvsAbbTerraAcImplTest {
 	public void before() throws Exception {
 		final DummyModbusBridge bridge = new DummyModbusBridge(MID) //
 				.withRegisters(EvcsAbbTerraAc.DEVICE_START_ADDRESS | 0x0000, //
+						0x5411, // Connector Type / Rated Power 
+						0x0400, // Plant ID / Spare
+						0x0B19, // Production Week / ProductionYear 
 						0x1234, // Serial Number / Unique serial number low high
-						0x190B, // ProductionYear / Production Week 
-						0x0004, // Spare / Plant ID
-						0x1154, // Rated Power / Connector Type 
 						0x0102, // Firmware version
 						0x0304, //
 						0x00ED, // User Settable Max Current
@@ -98,11 +98,11 @@ public class EvsAbbTerraAcImplTest {
 	public void testSerialNumber() throws Exception {
 		this.componentTest.activate(CONFIG)
 		.next(new TestCase()//
-				.output(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER, 0x1234) //
-				.output(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR, (short) 25) //
-				.output(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK, (short) 11) //
 				.output(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE, ConnectorType.TYPE_2_T) //
 				.output(EvcsAbbTerraAc.ChannelId.RATED_POWER, RatedPower.ELEVEN_KW) //
+				.output(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK, (short) 11) //
+				.output(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR, (short) 25) //
+				.output(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER, 0x1234) //
 				)
 		.deactivate();
 	}

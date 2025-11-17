@@ -6,7 +6,7 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 import io.openems.edge.meter.api.PhaseRotation;
 
 @ObjectClassDefinition(//
-		name = "ABB Terra AC", //
+		name = "EVCS ABB Terra AC", //
 		description = "Implements the ABB Terra AC electric vehicle charging station.")
 @interface Config {
 

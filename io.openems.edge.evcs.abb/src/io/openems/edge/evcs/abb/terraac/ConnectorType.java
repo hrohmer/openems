@@ -14,6 +14,11 @@ public enum ConnectorType implements OptionsEnum {
 	TYPE_1_P(0x50, "Type 1 Cable represented as P"),
 	TYPE_2_S(0x53, "Type 2 Socket with Shutter represented as S"),
 	TYPE_2_T(0x54, "Type 2 Socket represented as T"),
+	
+	/*
+	 * Special Error in case the channel is not ready
+	 */
+	CHANNEL_ERROR(0xFF, "Channel error or not ready"),
 	;
 	
 	private final int state;

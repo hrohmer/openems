@@ -6,6 +6,7 @@ import io.openems.common.channel.Unit;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
+import io.openems.edge.bridge.modbus.api.element.SignedQuadruplewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.common.channel.Doc;
@@ -30,11 +31,10 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		
 		// see Chapter 5.1 Serial Number
+		SERIAL_NUMBER_BLOCK(Doc.of(OpenemsType.LONG).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The serial number"), new SignedQuadruplewordElement(DEVICE_START_ADDRESS | 0x0000), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		SERIAL_NUMBER(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The serial number"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0000), ElementToChannelConverter.DIRECT_1_TO_1 ),
-		PRODUCTION_DATE_RAW(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The production date (year and week)"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		PRODUCTION_DATE_YEAR(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_ONLY).text("The production year"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), null ),
 		PRODUCTION_DATE_WEEK(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_ONLY).text("The production week of year"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), null ),
-		CONNECTOR_DATA(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("Connector type / rated power"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		CONNECTOR_TYPE(Doc.of(ConnectorType.values()).accessMode(AccessMode.READ_ONLY).text("Connector type"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), null ),
 		RATED_POWER(Doc.of(RatedPower.values()).accessMode(AccessMode.READ_ONLY).text("Rated power"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), null ),
 		// Word 0x0003 has fixed values
@@ -50,7 +50,11 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 		CHARGING_CURRENT_LIMIT_BY_MODBUS(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).unit(Unit.MILLIAMPERE).persistencePriority(PersistencePriority.HIGH).text("Charging current limit set by Modbus"), new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0022), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		FALLBACK_LIMIT(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).unit(Unit.AMPERE).persistencePriority(PersistencePriority.HIGH).text("Fallback limit"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0024), ElementToChannelConverter.DIRECT_1_TO_1 ),
 
-		SET_CHARGING_CURRENT_LIMIT(Doc.of(OpenemsType.DOUBLE).accessMode(AccessMode.READ_ONLY).unit(Unit.AMPERE).persistencePriority(PersistencePriority.HIGH).text("Set Charging Current Limit"), new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0100), ElementToChannelConverter.SCALE_FACTOR_MINUS_3 ),
+		SET_CHARGING_CURRENT_LIMIT(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.WRITE_ONLY).unit(Unit.MILLIAMPERE).persistencePriority(PersistencePriority.HIGH).text("Set Charging Current Limit"), new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0100), ElementToChannelConverter.DIRECT_1_TO_1 ),
+		SET_LOCK_UNLOCK_SOCKET_CABLE(Doc.of(LockUnlockSocketCable.values()).accessMode(AccessMode.WRITE_ONLY).persistencePriority(PersistencePriority.HIGH).text("This register (4103h) provides an option only for Socket cable to lock or unlock on Charger side"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0103), ElementToChannelConverter.DIRECT_1_TO_1),
+		SET_START_STOP(Doc.of(StartStop.values()).accessMode(AccessMode.WRITE_ONLY).persistencePriority(PersistencePriority.HIGH).text("This register (4105h) provides an option to start or stop a charge session"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0105), ElementToChannelConverter.DIRECT_1_TO_1),
+		SET_COMMUNICATION_TIMEOUT(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.WRITE_ONLY).persistencePriority(PersistencePriority.HIGH).text("Communication timeout"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0106), ElementToChannelConverter.DIRECT_1_TO_1),
+		SET_FALLBACK_LIMIT(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.WRITE_ONLY).unit(Unit.AMPERE).persistencePriority(PersistencePriority.HIGH).text("Set fallback limit"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0109), ElementToChannelConverter.DIRECT_1_TO_1),
 		;
 
 		private final Doc doc;

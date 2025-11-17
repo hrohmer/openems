@@ -28,7 +28,12 @@ public enum ErrorCodes implements OptionsEnum {
 			+ "EVSE fail to communicate with each other."),
 	E_LOCK_FAILURE(0x1000, "Error to lock / unlock the charge connector"),
 	MISSING_PHASE(0x2000, "One or more phases are missing"),
-	MODBUS_COMMUNICATION_LOST(0x4000, "The Modus communication is lost.")
+	MODBUS_COMMUNICATION_LOST(0x4000, "The Modus communication is lost."),
+	
+	/* 
+	 * Internal Error code in case the channel is not ready
+	 */
+	CHANNEL_ERROR(0xFFFF, "Channel error, or channel is not ready to read")
 	;
 	
 	private final int state;

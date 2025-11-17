@@ -328,7 +328,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	}
 
 	private FC16WriteRegistersTask getDeviceControlTask() {
-		return new FC16WriteRegistersTask(DEVICE_START_ADDRESS, //
+		return new FC16WriteRegistersTask(0x4100, //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT), //
 				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0102, DEVICE_START_ADDRESS | 0x0102), //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE), //

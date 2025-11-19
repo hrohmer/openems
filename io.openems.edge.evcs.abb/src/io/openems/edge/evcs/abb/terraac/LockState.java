@@ -22,7 +22,7 @@ public enum LockState implements OptionsEnum {
 	/*
 	 * Internal Lock state if channel has an error or is not ready
 	 */
-	CHANNEL_ERROR(0xFFFF, "Channel error or not ready"),
+	UNDEFINED(-1, "Channel error or not ready"),
 	;
 	
 	private final int state;
@@ -49,6 +49,6 @@ public enum LockState implements OptionsEnum {
 
 	@Override
 	public OptionsEnum getUndefined() {
-		return NO_CABLE;
+		return UNDEFINED;
 	}
 }

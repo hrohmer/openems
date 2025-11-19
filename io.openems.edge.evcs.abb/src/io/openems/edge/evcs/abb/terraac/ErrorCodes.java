@@ -33,7 +33,7 @@ public enum ErrorCodes implements OptionsEnum {
 	/* 
 	 * Internal Error code in case the channel is not ready
 	 */
-	CHANNEL_ERROR(0xFFFF, "Channel error, or channel is not ready to read")
+	UNDEFINED(-1, "Channel error, or channel is not ready to read")
 	;
 	
 	private final int state;
@@ -56,6 +56,6 @@ public enum ErrorCodes implements OptionsEnum {
 
 	@Override
 	public OptionsEnum getUndefined() {
-		return NONE;
+		return UNDEFINED;
 	}
 }

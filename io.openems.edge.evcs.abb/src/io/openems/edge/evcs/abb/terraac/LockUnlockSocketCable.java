@@ -12,6 +12,10 @@ public enum LockUnlockSocketCable implements OptionsEnum {
 	
 	UNLOCK(0x0000, "Unlock the cable/connector. Precaution is advised to make sure that no ongoing charging session prior to setting this state"),
 	LOCK(0x0001, "Cable will be locked irrespective of charging session until unlock is set or power cycle performed"),
+	/*
+	 * Internal state if channel has an error or is not ready
+	 */
+	UNDEFINED(-1, "Channel error or not ready"),
 	;
 	
 	private final int state;
@@ -38,6 +42,6 @@ public enum LockUnlockSocketCable implements OptionsEnum {
 
 	@Override
 	public OptionsEnum getUndefined() {
-		return UNLOCK;
+		return UNDEFINED;
 	}
 }

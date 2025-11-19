@@ -12,6 +12,10 @@ public enum StartStop implements OptionsEnum {
 	
 	START(0x0000, "Start charging session"),
 	STOP(0x0001, "Stop charging session"),
+	/*
+	 * Internal state if channel has an error or is not ready
+	 */
+	UNDEFINED(-1, "Channel error or not ready"),
 	;
 	
 	private final int state;
@@ -38,6 +42,6 @@ public enum StartStop implements OptionsEnum {
 
 	@Override
 	public OptionsEnum getUndefined() {
-		return STOP;
+		return UNDEFINED;
 	}
 }

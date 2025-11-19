@@ -4,6 +4,7 @@ import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUT
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
 
 import java.nio.ByteBuffer;
+import java.text.MessageFormat;
 import java.util.HexFormat;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -140,7 +141,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		this._setChargingType(ChargingType.AC);
 		this._setFixedMaximumHardwarePower(this.getConfiguredMaximumHardwarePower());
 		this._setFixedMinimumHardwarePower(this.getConfiguredMinimumHardwarePower());
-		this._setPowerPrecision(230);
+		this._setPowerPrecision(0.23D);
 		this._setPhases(Phases.THREE_PHASE);
 	}
 
@@ -178,6 +179,10 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 	@Override
 	public boolean applyChargePowerLimit(int power) throws Exception {
+		logger.warn("Got new charging power limit: {}", power);
+		
+		// set timeout to 30 seconds
+		this.channel(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT).setNextValue(30);
 		
 		int currentForLoad = 0;
 		
@@ -194,13 +199,18 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			
 		} else {
 			
+			
 			final Double currentMilliampere = 1000.0D * (power / Math.sqrt(this.getPhasesAsInt()) / Evcs.DEFAULT_VOLTAGE);
-			currentForLoad = currentMilliampere.intValue();
-			applyDisplayText("Loading");
+			currentForLoad = Math.min(currentMilliampere.intValue(), this.config.maxHwCurrent());
+			this.logger.info("Set current charging limit to: {}mA", currentForLoad);
+			applyDisplayText(MessageFormat.format("Loading with {0,number}mA", currentForLoad));
 		}
 		
 		this.channel(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT).setNextValue(currentForLoad);
 		this.channel(EvcsAbbTerraAc.ChannelId.SET_START_STOP).setNextValue(power > 0 ? StartStop.START : StartStop.STOP);
+		// set to 50% of current load or min HW Current if less
+		this.channel(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT).setNextValue(Math.max(this.config.minHwCurrent(), Double.valueOf(currentForLoad / 2000).intValue()));
+		
 		return currentForLoad > 0;
 	}
 
@@ -249,7 +259,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.config.readOnly() ? 
 				"Power: " + this.channel(ElectricityMeter.ChannelId.ACTIVE_POWER).getNextValue().orElse(null) :
 				"Power: " + this.channel(ElectricityMeter.ChannelId.ACTIVE_POWER).getNextValue().orElse(null)
-				+ "| Limit:" + this.getSetChargePowerLimit().orElse(null) + "| Status:" + this.getStatus().getName();
+				+ "| Limit:" + this.getSetChargePowerLimit().orElse(null) + "| Status:" + this.getStatus().getName() + "|Error:" + this.getErrorChannel().value().asEnum();
 	}
 
 	@Override

@@ -18,7 +18,7 @@ public enum ConnectorType implements OptionsEnum {
 	/*
 	 * Special Error in case the channel is not ready
 	 */
-	CHANNEL_ERROR(0xFF, "Channel error or not ready"),
+	UNDEFINED(-1, "Channel error or not ready"),
 	;
 	
 	private final int state;
@@ -45,6 +45,6 @@ public enum ConnectorType implements OptionsEnum {
 
 	@Override
 	public OptionsEnum getUndefined() {
-		return TYPE_2_G;
+		return UNDEFINED;
 	}
 }

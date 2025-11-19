@@ -13,6 +13,10 @@ public enum RatedPower implements OptionsEnum {
 	SEVEN_KW(0x0007, "7 kW"),
 	ELEVEN_KW(0x0011, "11 kW"),
 	TWENTYTWO_KW(0x0022, "22 kW"),
+	/*
+	 * Internal state if channel has an error or is not ready
+	 */
+	UNDEFINED(-1, "Channel error or not ready"),
 	;
 	
 	private final int state;
@@ -35,6 +39,6 @@ public enum RatedPower implements OptionsEnum {
 
 	@Override
 	public OptionsEnum getUndefined() {
-		return SEVEN_KW;
+		return UNDEFINED;
 	}
 }

@@ -1,13 +1,11 @@
 package io.openems.edge.evcs.abb.terraac;
 
+import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE;
 import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUTE_WRITE;
 import static io.openems.edge.evcs.api.EvcsUtils.milliampereToWatt;
-import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
 
-import java.nio.ByteBuffer;
 import java.text.MessageFormat;
-import java.util.HexFormat;
 
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
@@ -41,6 +39,9 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.common.channel.Channel;
+import io.openems.edge.common.channel.IntegerReadChannel;
+import io.openems.edge.common.channel.IntegerWriteChannel;
+import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.evcs.api.ChargeStateHandler;
@@ -160,6 +161,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			case TOPIC_CYCLE_EXECUTE_WRITE:
 				this.writeHandler.run();
 				break;
+				
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 				if (ErrorCodes.NONE.compareTo(getErrorChannel().value().asEnum()) != 0) {
 					this._setStatus(Status.ERROR);
@@ -178,6 +180,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				}
 				logger.warn("Set state to: {}", this.getStatus());
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
+				
+				this._setEnergySession(getActiveConsumptionEnergy().get().intValue());
 				break;
 			}
 		}
@@ -206,7 +210,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 	@Override
 	public boolean applyChargePowerLimit(int power) throws Exception {
-		logger.warn("Got new charging power limit: {}", power);
+		logger.info("Got new charging power limit: {}mW", power);
 		
 		int currentForLoad = 0;
 		
@@ -229,7 +233,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			applyDisplayText(MessageFormat.format("Loading with {0,number}mA", currentForLoad));
 		}
 		
-		this.channel(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT).setNextValue(currentForLoad);
+		setSetChargingCurrentLimit(currentForLoad);
 		this.channel(EvcsAbbTerraAc.ChannelId.SET_START_STOP).setNextValue(power > 0 ? StartStop.START : StartStop.STOP);
 
 		// set timeout to 120 seconds. After 120 seconds without communication the fallback limit is used for charging
@@ -276,6 +280,36 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	private Channel<LockState> getLockState() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE);
 	}
+	
+	
+	private IntegerReadChannel getChargingCurrentLimitChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT);
+	}
+	
+	private Value<Integer> getChargingCurrentLimit() {
+		return getChargingCurrentLimitChannel().value();
+	}
+	
+	private IntegerWriteChannel getSetChargingCurrentLimitChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT);
+	}
+	
+	private void setSetChargingCurrentLimit(int chargingCurrent) {
+		getSetChargingCurrentLimitChannel().setNextValue(chargingCurrent);
+	}
+	
+	private Value<Integer> getSetChargingCurrentLimit() {
+		return getSetChargingCurrentLimitChannel().value();
+	}
+
+	private IntegerWriteChannel getChargingCurrentLimitModbusChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS);
+	}
+
+	private Value<Integer> getChargingCurrentLimitModbus() {
+		return getChargingCurrentLimitModbusChannel().value();
+	}
+
 	/*
 	 * === Logging ===========================================================
 	 */
@@ -285,7 +319,12 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.config.readOnly() ? 
 				"Power: " + this.channel(ElectricityMeter.ChannelId.ACTIVE_POWER).getNextValue().orElse(null) :
 				"Power: " + this.channel(ElectricityMeter.ChannelId.ACTIVE_POWER).getNextValue().orElse(null)
-				+ "| Limit:" + this.getSetChargePowerLimit().orElse(null) + "| Status:" + this.getStatus().getName() + "|Error:" + this.getErrorChannel().value().asEnum();
+				+ "| Set Charging power:" + this.getSetChargePowerLimit().get() //
+				+ "| Set Charging current:" + getSetChargingCurrentLimit().get() //
+				+ "| Charging current:" + this.getChargingCurrentLimit().get() //
+				+ "| Charging current (modbus):" + this.getChargingCurrentLimitModbus().get() //
+				+ "| Status:" + this.getStatus().getName() //
+				+ "| Error:" + this.getErrorChannel().value().asEnum();
 	}
 
 	@Override

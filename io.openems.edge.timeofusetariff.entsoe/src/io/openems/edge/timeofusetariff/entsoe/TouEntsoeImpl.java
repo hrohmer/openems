@@ -15,14 +15,7 @@ import static java.time.temporal.ChronoUnit.SECONDS;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
-import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalUnit;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
@@ -90,8 +83,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 	private Config config = null;
 	private String securityToken = null;
 	private TouManualHelper helper = TouManualHelper.EMPTY_TOU_MANUAL_HELPER;
-	private ScheduledFuture<?> future = null;
-	private ScheduledFuture<?> currentPriceUpdateFuture = null;
 
 	public TouEntsoeImpl() {
 		super(//
@@ -123,11 +114,10 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 		this.meta.getCurrencyChannel().onChange(this.onCurrencyChange);
 		this.timeService = this.httpBridge.createService(HttpBridgeTimeServiceDefinition.INSTANCE);
 
-		// Schedule once
-		this.scheduleTask(0);
-		
-		// Schedule the price "logger"
-		this.scheduleCurrentPriceUpdateTask();
+		this.timeService.subscribeTime(new EntsoeDelayTimeProvider(this.componentManager.getClock()), //
+				this::createEntsoeEndpoint, //
+				this::handleEndpointResponse, //
+				this::handleEndpointError);
 	}
 
 	@Deactivate
@@ -137,30 +127,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 			this.httpBridgeFactory.unget(this.httpBridge);
 			this.httpBridge = null;
 		}
-	}
-
-	private synchronized void scheduleCurrentPriceUpdateTask() {
-		// in case old Jobs are present, cancel them
-		if (this.currentPriceUpdateFuture != null && !this.currentPriceUpdateFuture.isDone()) {
-			this.currentPriceUpdateFuture.cancel(false);
-		}
-		
-		final ZonedDateTime now = ZonedDateTime.now();
-		final ZonedDateTime nextRun;
-		if (this.config.resolution().compareTo(Resolution.HOURLY) == 0) {
-			// run every full hour
-			nextRun = now.plusHours(1).withMinute(0).withSecond(0);
-		} else {
-			// run each quarter of an hour
-			final int quarterlyMinutes = (int) Math.round(now.getMinute() / 15.0) * 15;
-			nextRun = quarterlyMinutes == 60 ? //
-					now.plusHours(1).withMinute(0).withSecond(0) : //
-						now.withMinute(quarterlyMinutes).withSecond(0);
-		}
-
-		
-		this.currentPriceUpdateFuture = this.executor.schedule(this.currentPriceUpdate, //
-				Duration.between(now, nextRun).abs().getSeconds(), TimeUnit.SECONDS);
 	}
 
 	/**
@@ -175,30 +141,19 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 		return EntsoeApi.createEndPoint(biddingZone, this.securityToken, fromDate, toDate);
 	}
 
-	/*
-	 * Special Runnable to "log" the current price to a named channel.
+	/**
+	 * Handles successful response from ENTSO-E API.
+	 *
+	 * @param response the HTTP response
+	 * @throws OpenemsNamedException        if processing fails
+	 * @throws IOException                  on Error
+	 * @throws SAXException                 on Error
+	 * @throws ParserConfigurationException on Error
 	 */
-	private final Runnable currentPriceUpdate = () -> {
-		
-		try {
-			final TimeOfUsePrices currentPrices = TimeOfUsePrices.from(ZonedDateTime.now(), this.prices.get());
-			if (currentPrices.isEmpty()) {
-				this.channel(TouEntsoe.ChannelId.CURRENT_PRICE).setNextValue(Double.NaN);
-			} else {
-				this.channel(TouEntsoe.ChannelId.CURRENT_PRICE).setNextValue(currentPrices.getFirst());
-			}
-		} finally {
-			this.scheduleCurrentPriceUpdateTask();
-		}
-	};
-	
-	private final Runnable task = () -> {
-		var token = this.securityToken;
-		var areaCode = this.config.biddingZone().code;
-		var fromDate = ZonedDateTime.now().truncatedTo(ChronoUnit.HOURS);
-		var toDate = fromDate.plusDays(1);
-		var unableToUpdatePrices = false;
-		var preferredResolution = this.config.resolution();
+	private void handleEndpointResponse(HttpResponse<String> response)
+			throws OpenemsNamedException, ParserConfigurationException, SAXException, IOException {
+		setValue(this, TouEntsoe.ChannelId.HTTP_STATUS_CODE, response.status().code());
+		setValue(this, TouEntsoe.ChannelId.UNABLE_TO_UPDATE_PRICES, false);
 
 		final var result = response.data();
 		final var entsoeCurrency = parseCurrency(result);
@@ -212,7 +167,14 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 				gridFees);
 
 		this.prices.set(processedPrices);
-	}
+
+		final TimeOfUsePrices currentPrices = TimeOfUsePrices.from(ZonedDateTime.now(), processedPrices);
+		if (currentPrices.isEmpty()) {
+			this.channel(TouEntsoe.ChannelId.CURRENT_PRICE).setNextValue(Double.NaN);
+		} else {
+			this.channel(TouEntsoe.ChannelId.CURRENT_PRICE).setNextValue(currentPrices.getFirst());
+		}
+}
 
 	/**
 	 * Handles errors from ENTSO-E API.

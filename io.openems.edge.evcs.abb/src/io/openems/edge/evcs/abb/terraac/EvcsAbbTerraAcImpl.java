@@ -149,6 +149,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		this._setMaximumPower(milliampereToWatt(this.config.maxHwCurrent(), 3));
 		this._setPowerPrecision(0.23D);
 		this._setPhases(Phases.THREE_PHASE);
+		this._setStatus(Status.UNDEFINED);
 	}
 
 	@Override
@@ -160,21 +161,21 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				break;
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 				if (this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE).value().asEnum() != ErrorCodes.NONE) {
-					_setStatus(Status.ERROR);
+					this._setStatus(Status.ERROR);
 				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE).value().get()) {					
-					_setStatus(Status.NOT_READY_FOR_CHARGING);
+					this._setStatus(Status.NOT_READY_FOR_CHARGING);
 				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1).value().get()) {					
-					_setStatus(Status.NOT_READY_FOR_CHARGING);
+					this._setStatus(Status.NOT_READY_FOR_CHARGING);
 				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2).value().get()) {					
-					_setStatus(Status.NOT_READY_FOR_CHARGING);
+					this._setStatus(Status.NOT_READY_FOR_CHARGING);
 				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1).value().get()) {					
-					_setStatus(Status.READY_FOR_CHARGING);
+					this._setStatus(Status.READY_FOR_CHARGING);
 				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2).value().get()) {					
-					_setStatus(Status.CHARGING);
+					this._setStatus(Status.CHARGING);
 				} else {
-					_setStatus(Status.UNDEFINED);
+					this._setStatus(Status.NOT_READY_FOR_CHARGING);
 				}
-				_setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
+				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				break;
 			}
 		}

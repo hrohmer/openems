@@ -181,9 +181,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	public boolean applyChargePowerLimit(int power) throws Exception {
 		logger.warn("Got new charging power limit: {}", power);
 		
-		// set timeout to 30 seconds
-		this.channel(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT).setNextValue(30);
-		
 		int currentForLoad = 0;
 		
 		final ConnectorType type = getConnectorType().value().asEnum();
@@ -199,7 +196,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			
 		} else {
 			
-			
 			final Double currentMilliampere = 1000.0D * (power / Math.sqrt(this.getPhasesAsInt()) / Evcs.DEFAULT_VOLTAGE);
 			currentForLoad = Math.min(currentMilliampere.intValue(), this.config.maxHwCurrent());
 			this.logger.info("Set current charging limit to: {}mA", currentForLoad);
@@ -208,6 +204,9 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		
 		this.channel(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT).setNextValue(currentForLoad);
 		this.channel(EvcsAbbTerraAc.ChannelId.SET_START_STOP).setNextValue(power > 0 ? StartStop.START : StartStop.STOP);
+
+		// set timeout to 120 seconds. After 120 seconds without communication the fallback limit is used for charging
+		this.channel(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT).setNextValue(120);		
 		// set to 50% of current load or min HW Current if less
 		this.channel(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT).setNextValue(Math.max(this.config.minHwCurrent(), Double.valueOf(currentForLoad / 2000).intValue()));
 		

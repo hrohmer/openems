@@ -298,10 +298,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetChargingCurrentLimitChannel().setNextValue(chargingCurrent);
 	}
 	
-	private Value<Integer> getSetChargingCurrentLimit() {
-		return getSetChargingCurrentLimitChannel().value();
-	}
-
 	private IntegerWriteChannel getChargingCurrentLimitModbusChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS);
 	}
@@ -320,7 +316,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				"Power: " + this.channel(ElectricityMeter.ChannelId.ACTIVE_POWER).getNextValue().orElse(null) :
 				"Power: " + this.channel(ElectricityMeter.ChannelId.ACTIVE_POWER).getNextValue().orElse(null)
 				+ "| Set Charging power:" + this.getSetChargePowerLimit().get() //
-				+ "| Set Charging current:" + getSetChargingCurrentLimit().get() //
+				+ "| Set Charging current:" + getSetChargingCurrentLimitChannel().getNextWriteValue().orElse(Integer.MIN_VALUE) //
 				+ "| Charging current:" + this.getChargingCurrentLimit().get() //
 				+ "| Charging current (modbus):" + this.getChargingCurrentLimitModbus().get() //
 				+ "| Status:" + this.getStatus().getName() //

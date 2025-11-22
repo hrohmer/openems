@@ -160,7 +160,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.writeHandler.run();
 				break;
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-				if (this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE).value().asEnum() != ErrorCodes.NONE) {
+				if (ErrorCodes.NONE.compareTo(this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE).value().asEnum()) != 0) {
 					this._setStatus(Status.ERROR);
 				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE).value().get()) {					
 					this._setStatus(Status.NOT_READY_FOR_CHARGING);
@@ -175,6 +175,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				} else {
 					this._setStatus(Status.NOT_READY_FOR_CHARGING);
 				}
+				logger.warn("Set state to: {}", this.getStatus());
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				break;
 			}
@@ -324,7 +325,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
 				this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
 				this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C, DEVICE_START_ADDRESS | 0x000C), //
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
 				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this)) //
 					.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
 					.bit(9, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1) //
@@ -358,19 +359,19 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001E),
 						ElementToChannelConverter.DIRECT_1_TO_1), //
 				this.m(EvcsAbbTerraAc.ChannelId.COMMUNICATION_TIMEOUT), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0021, DEVICE_START_ADDRESS | 0x0021), //
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0021), //
 				this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS), //
 				this.m(EvcsAbbTerraAc.ChannelId.FALLBACK_LIMIT),
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0025, DEVICE_START_ADDRESS | 0x0025) //
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0025) //
 				);
 	}
 
 	private FC16WriteRegistersTask getDeviceControlTask() {
 		return new FC16WriteRegistersTask(0x4100, //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0102, DEVICE_START_ADDRESS | 0x0102), //
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0102), //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0104, DEVICE_START_ADDRESS | 0x0104), //
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0104), //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_START_STOP), //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT), //
 				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0107, DEVICE_START_ADDRESS | 0x0108), //
@@ -388,7 +389,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE).setNextValue(null);
 			} else {
 				final Long serialNumber = Long.class.cast(value);
-				logger.warn("SerialNumberBLock: 0x{}", HexFormat.of().formatHex(ByteBuffer.allocate(Long.BYTES).putLong(serialNumber).array()));
+//				logger.warn("SerialNumberBLock: 0x{}", HexFormat.of().formatHex(ByteBuffer.allocate(Long.BYTES).putLong(serialNumber).array()));
 				this.channel(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).setNextValue(Long.valueOf(serialNumber.longValue() & 0x000000000000FFFF).intValue());
 				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR)
 					.setNextValue((serialNumber.longValue() >> 16) & 0xFF);

@@ -62,7 +62,8 @@ import io.openems.edge.meter.api.ElectricityMeter;
 		immediate = true, //
 		configurationPolicy = REQUIRE)
 @EventTopics({ //
-		TOPIC_CYCLE_EXECUTE_WRITE //
+		TOPIC_CYCLE_EXECUTE_WRITE, //
+		TOPIC_CYCLE_AFTER_PROCESS_IMAGE
 })
 public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implements Evcs, ElectricityMeter, ManagedEvcs,
 		OpenemsComponent, ModbusComponent, EventHandler, EvcsAbbTerraAc {
@@ -160,7 +161,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.writeHandler.run();
 				break;
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-				if (ErrorCodes.NONE.compareTo(this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE).value().asEnum()) != 0) {
+				if (ErrorCodes.NONE.compareTo(getErrorChannel().value().asEnum()) != 0) {
 					this._setStatus(Status.ERROR);
 				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE).value().get()) {					
 					this._setStatus(Status.NOT_READY_FOR_CHARGING);

@@ -1,6 +1,7 @@
 package io.openems.edge.timeofusetariff.entsoe;
 
 import static io.openems.common.utils.StringUtils.definedOrElse;
+import static io.openems.edge.common.channel.ChannelUtils.setValue;
 import static io.openems.edge.timeofusetariff.api.TouManualHelper.EMPTY_TOU_MANUAL_HELPER;
 import static io.openems.edge.timeofusetariff.api.utils.ExchangeRateApi.getExchangeRateOrElse;
 import static io.openems.edge.timeofusetariff.api.utils.TimeOfUseTariffUtils.generateDebugLog;
@@ -8,8 +9,11 @@ import static io.openems.edge.timeofusetariff.entsoe.Utils.parseCurrency;
 import static io.openems.edge.timeofusetariff.entsoe.Utils.parsePrices;
 import static io.openems.edge.timeofusetariff.entsoe.Utils.parseToSchedule;
 import static io.openems.edge.timeofusetariff.entsoe.Utils.processPrices;
+import static java.time.temporal.ChronoUnit.HOURS;
+import static java.time.temporal.ChronoUnit.SECONDS;
 
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
@@ -35,9 +39,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
+import io.openems.common.bridge.http.api.BridgeHttp;
+import io.openems.common.bridge.http.api.BridgeHttp.Endpoint;
+import io.openems.common.bridge.http.api.BridgeHttpFactory;
+import io.openems.common.bridge.http.api.HttpError;
+import io.openems.common.bridge.http.api.HttpResponse;
+import io.openems.common.bridge.http.time.DelayTimeProvider;
+import io.openems.common.bridge.http.time.DelayTimeProviderChain;
+import io.openems.common.bridge.http.time.HttpBridgeTimeService;
+import io.openems.common.bridge.http.time.HttpBridgeTimeServiceDefinition;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.oem.OpenemsEdgeOem;
-import io.openems.common.utils.ThreadPoolUtils;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
@@ -55,10 +67,9 @@ import io.openems.edge.timeofusetariff.api.TouManualHelper;
 )
 public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe, OpenemsComponent, TimeOfUseTariff {
 
-	private static final int API_EXECUTE_HOUR = 14;
+	private static final int INTERNAL_ERROR = -1;
 
 	private final Logger log = LoggerFactory.getLogger(TouEntsoeImpl.class);
-	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 	private final AtomicReference<TimeOfUsePrices> prices = new AtomicReference<>(TimeOfUsePrices.EMPTY_PRICES);
 
 	@Reference
@@ -69,6 +80,12 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 
 	@Reference
 	private ComponentManager componentManager;
+
+	@Reference
+	private BridgeHttpFactory httpBridgeFactory;
+	private BridgeHttp httpBridge;
+
+	private HttpBridgeTimeService timeService;
 
 	private Config config = null;
 	private String securityToken = null;
@@ -84,7 +101,11 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 	}
 
 	private final BiConsumer<Value<Integer>, Value<Integer>> onCurrencyChange = (a, b) -> {
-		this.scheduleTask(0);
+		this.timeService.removeAllTimeEndpoints();
+		this.timeService.subscribeTime(new EntsoeDelayTimeProvider(this.componentManager.getClock()), //
+				this::createEntsoeEndpoint, //
+				this::handleEndpointResponse, //
+				this::handleEndpointError);
 	};
 
 	@Activate
@@ -96,9 +117,11 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 		}
 
 		this.applyConfig(config);
+		this.httpBridge = this.httpBridgeFactory.get();
 
 		// React on updates to Currency.
 		this.meta.getCurrencyChannel().onChange(this.onCurrencyChange);
+		this.timeService = this.httpBridge.createService(HttpBridgeTimeServiceDefinition.INSTANCE);
 
 		// Schedule once
 		this.scheduleTask(0);
@@ -110,8 +133,10 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 	@Deactivate
 	protected void deactivate() {
 		super.deactivate();
-		this.meta.getCurrencyChannel().removeOnChangeCallback(this.onCurrencyChange);
-		ThreadPoolUtils.shutdownAndAwaitTermination(this.executor, 0);
+		if (this.httpBridge != null) {
+			this.httpBridgeFactory.unget(this.httpBridge);
+			this.httpBridge = null;
+		}
 	}
 
 	private synchronized void scheduleCurrentPriceUpdateTask() {
@@ -139,15 +164,15 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 	}
 
 	/**
-	 * Schedules execution the the update Task.
-	 * 
-	 * @param seconds execute task in seconds
+	 * Creates the ENTSO-E API endpoint for querying day-ahead prices.
+	 *
+	 * @return the configured {@link Endpoint}
 	 */
-	private synchronized void scheduleTask(long seconds) {
-		if (this.future != null) {
-			this.future.cancel(false);
-		}
-		this.future = this.executor.schedule(this.task, seconds, TimeUnit.SECONDS);
+	private Endpoint createEntsoeEndpoint() {
+		final var fromDate = ZonedDateTime.now().truncatedTo(HOURS);
+		final var toDate = fromDate.plusDays(1);
+		final var biddingZone = this.config.biddingZone();
+		return EntsoeApi.createEndPoint(biddingZone, this.securityToken, fromDate, toDate);
 	}
 
 	/*
@@ -175,42 +200,72 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 		var unableToUpdatePrices = false;
 		var preferredResolution = this.config.resolution();
 
-		try {
-			final var result = EntsoeApi.query(token, areaCode, fromDate, toDate);
-			final var entsoeCurrency = parseCurrency(result);
-			final var globalCurrency = this.meta.getCurrency();
-			final double exchangeRate = getExchangeRateOrElse(entsoeCurrency, globalCurrency, 1.);
-			final var gridFees = this.helper.getPrices();
+		final var result = response.data();
+		final var entsoeCurrency = parseCurrency(result);
+		final var globalCurrency = this.meta.getCurrency();
+		final double exchangeRate = getExchangeRateOrElse(entsoeCurrency, globalCurrency, 1.);
+		final var gridFees = this.helper.getPrices();
 
-			// Parse the response for the prices
-			var parsedPrices = parsePrices(result, exchangeRate, preferredResolution);
+		// Parse the response for the prices
+		final var parsedPrices = parsePrices(result, this.config.resolution(), this.config.biddingZone());
+		final var processedPrices = processPrices(this.componentManager.getClock(), parsedPrices, exchangeRate,
+				gridFees);
 
-			this.prices.set(processPrices(this.componentManager.getClock(), parsedPrices, exchangeRate, gridFees));
+		this.prices.set(processedPrices);
+	}
 
-		} catch (IOException | ParserConfigurationException | SAXException e) {
-			this.logWarn(this.log, "Unable to Update Entsoe Time-Of-Use Price: " + e.getMessage());
-			e.printStackTrace();
-			unableToUpdatePrices = true;
+	/**
+	 * Handles errors from ENTSO-E API.
+	 *
+	 * @param error the HTTP error
+	 */
+	private void handleEndpointError(HttpError error) {
+		final var httpStatusCode = switch (error) {
+		case HttpError.ResponseError re -> re.status.code();
+		default -> INTERNAL_ERROR;
+		};
+
+		setValue(this, TouEntsoe.ChannelId.HTTP_STATUS_CODE, httpStatusCode);
+		setValue(this, TouEntsoe.ChannelId.UNABLE_TO_UPDATE_PRICES, true);
+
+		this.logWarn(this.log, "Unable to Update Entsoe Time-Of-Use Price: " + error.getMessage());
+	}
+
+	/**
+	 * Delay time provider for ENTSO-E API requests.
+	 */
+	public static class EntsoeDelayTimeProvider implements DelayTimeProvider {
+
+		private final Clock clock;
+
+		public EntsoeDelayTimeProvider(Clock clock) {
+			this.clock = clock;
 		}
 
-		this.channel(TouEntsoe.ChannelId.UNABLE_TO_UPDATE_PRICES).setNextValue(unableToUpdatePrices);
-
-		/*
-		 * Schedule next price update at 2 o clock every day.
-		 */
-		var now = ZonedDateTime.now();
-		var nextRun = now.withHour(API_EXECUTE_HOUR).truncatedTo(ChronoUnit.HOURS);
-		if (unableToUpdatePrices) {
-			// If the prices are not updated, try again in next minute.
-			nextRun = now.plusMinutes(1).truncatedTo(ChronoUnit.MINUTES);
-			this.logWarn(this.log, "Unable to Update the prices, Trying again at: " + nextRun);
-		} else if (now.isAfter(nextRun)) {
-			nextRun = nextRun.plusDays(1);
+		@Override
+		public Delay onFirstRunDelay() {
+			return Delay.immediate();
 		}
 
-		var delay = Duration.between(now, nextRun).getSeconds();
-		this.scheduleTask(delay);
-	};
+		@Override
+		public Delay onErrorRunDelay(HttpError error) {
+			// On error, retry after 1 minute with some randomness
+			return DelayTimeProviderChain.fixedDelay(Duration.ofMinutes(10)) //
+					.plusRandomDelay(30, SECONDS) //
+					.getDelay();
+		}
+
+		@Override
+		public Delay onSuccessRunDelay(HttpResponse<String> result) {
+			try {
+				return Utils.calculateDelay(this.clock, result.data());
+
+			} catch (ParserConfigurationException | SAXException | IOException e) {
+				// Wait 30 minutes before retry
+				return Delay.of(Duration.ofMinutes(30));
+			}
+		}
+	}
 
 	private void applyConfig(Config config) {
 		this.securityToken = definedOrElse(config.securityToken(), this.oem.getEntsoeToken());
@@ -220,21 +275,22 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 		}
 
 		this.config = config;
+		final var clock = this.componentManager.getClock();
 
 		try {
-			var schedule = parseToSchedule(config.biddingZone(), config.ancillaryCosts(),
+			final var schedule = parseToSchedule(clock, config.biddingZone(), config.ancillaryCosts(),
 					msg -> this.logWarn(this.log, msg));
-			this.helper = new TouManualHelper(schedule, 0.0);
+			this.helper = new TouManualHelper(clock, schedule, 0.0);
+
 		} catch (OpenemsNamedException e) {
 			this.logWarn(this.log, "Unable to parse Schedule: " + e.getMessage());
 			this.helper = EMPTY_TOU_MANUAL_HELPER;
 		}
-
 	}
 
 	@Override
 	public TimeOfUsePrices getPrices() {
-		return TimeOfUsePrices.from(ZonedDateTime.now(), this.prices.get());
+		return TimeOfUsePrices.from(ZonedDateTime.now(this.componentManager.getClock()), this.prices.get());
 	}
 
 	@Override

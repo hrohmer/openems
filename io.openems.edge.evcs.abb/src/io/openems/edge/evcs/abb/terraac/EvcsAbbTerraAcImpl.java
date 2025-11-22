@@ -298,7 +298,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetChargingCurrentLimitChannel().setNextValue(chargingCurrent);
 	}
 	
-	private IntegerWriteChannel getChargingCurrentLimitModbusChannel() {
+	private IntegerReadChannel getChargingCurrentLimitModbusChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS);
 	}
 

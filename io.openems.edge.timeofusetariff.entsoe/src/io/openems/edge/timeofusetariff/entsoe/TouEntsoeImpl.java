@@ -16,6 +16,10 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
@@ -43,6 +47,7 @@ import io.openems.common.bridge.http.time.HttpBridgeTimeService;
 import io.openems.common.bridge.http.time.HttpBridgeTimeServiceDefinition;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.oem.OpenemsEdgeOem;
+import io.openems.common.utils.ThreadPoolUtils;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
@@ -63,6 +68,7 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 	private static final int INTERNAL_ERROR = -1;
 
 	private final Logger log = LoggerFactory.getLogger(TouEntsoeImpl.class);
+	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 	private final AtomicReference<TimeOfUsePrices> prices = new AtomicReference<>(TimeOfUsePrices.EMPTY_PRICES);
 
 	@Reference
@@ -83,6 +89,7 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 	private Config config = null;
 	private String securityToken = null;
 	private TouManualHelper helper = TouManualHelper.EMPTY_TOU_MANUAL_HELPER;
+	private ScheduledFuture<?> currentPriceUpdateFuture = null;
 
 	public TouEntsoeImpl() {
 		super(//
@@ -118,6 +125,9 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 				this::createEntsoeEndpoint, //
 				this::handleEndpointResponse, //
 				this::handleEndpointError);
+
+		// Schedule the price "logger"
+		this.scheduleCurrentPriceUpdateTask();
 	}
 
 	@Deactivate
@@ -127,6 +137,30 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 			this.httpBridgeFactory.unget(this.httpBridge);
 			this.httpBridge = null;
 		}
+		ThreadPoolUtils.shutdownAndAwaitTermination(this.executor, 0);
+	}
+
+	private synchronized void scheduleCurrentPriceUpdateTask() {
+		// in case old Jobs are present, cancel them
+		if (this.currentPriceUpdateFuture != null && !this.currentPriceUpdateFuture.isDone()) {
+			this.currentPriceUpdateFuture.cancel(false);
+		}
+		
+		final ZonedDateTime now = ZonedDateTime.now();
+		final ZonedDateTime nextRun;
+		if (this.config.resolution().compareTo(Resolution.HOURLY) == 0) {
+			// run every full hour
+			nextRun = now.plusHours(1).withMinute(0).withSecond(0);
+		} else {
+			// run each quarter of an hour
+			final int quarterlyMinutes = (int) Math.round(now.getMinute() / 15.0) * 15;
+			nextRun = quarterlyMinutes == 60 ? //
+					now.plusHours(1).withMinute(0).withSecond(0) : //
+						now.withMinute(quarterlyMinutes).withSecond(0);
+		}
+
+		this.currentPriceUpdateFuture = this.executor.schedule(this.currentPriceUpdateTask, //
+				Duration.between(now, nextRun).abs().getSeconds(), TimeUnit.SECONDS);
 	}
 
 	/**
@@ -167,14 +201,21 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 				gridFees);
 
 		this.prices.set(processedPrices);
+	}
 
-		final TimeOfUsePrices currentPrices = TimeOfUsePrices.from(ZonedDateTime.now(), processedPrices);
-		if (currentPrices.isEmpty()) {
-			this.channel(TouEntsoe.ChannelId.CURRENT_PRICE).setNextValue(Double.NaN);
-		} else {
-			this.channel(TouEntsoe.ChannelId.CURRENT_PRICE).setNextValue(currentPrices.getFirst());
+	/*
+	 * Special Runnable to "log" the current price to a named channel.
+	 */
+	private final Runnable currentPriceUpdateTask = () -> {
+		
+		try {
+			final TimeOfUsePrices currentPrices = getPrices();
+			setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE, currentPrices.isEmpty() ? Double.NaN : currentPrices.getFirst());
+		} finally {
+			this.scheduleCurrentPriceUpdateTask();
 		}
-}
+	};
+	
 
 	/**
 	 * Handles errors from ENTSO-E API.

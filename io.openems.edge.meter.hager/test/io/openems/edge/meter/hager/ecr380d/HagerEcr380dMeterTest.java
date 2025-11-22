@@ -21,8 +21,11 @@ public class HagerEcr380dMeterTest {
 	private static final String CID = "meter0";
 	private static final String MID = "modbus0";
 	private static final MyConfig CONFIG = MyConfig.create() //
-			.setId(CID).setModbusId(MID).setType(MeterType.GRID).build();
-
+			.setId(CID) //
+			.setModbusId(MID) //
+			.setType(MeterType.GRID) //
+			.build();
+	
 	private ComponentTest componentTest;
 
 	@Before
@@ -68,7 +71,7 @@ public class HagerEcr380dMeterTest {
 						0x0000, // PF_L2_IEC
 						0x0000, // PF_L1_IEEE
 						0x0000, // PF_L2_IEEE
-						0x0000 // PF_L3_IEEE
+						0x0000  // PF_L3_IEEE
 				) //
 				.withRegisters(HagerEcr380dMeter.ENERGY_START_ADDRESS | 0x0000, //
 						0x0098, 0x967F, // ACTIVE_CONSUMPTION_ENERGY

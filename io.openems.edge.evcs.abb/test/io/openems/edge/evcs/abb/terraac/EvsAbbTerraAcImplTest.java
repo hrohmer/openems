@@ -45,7 +45,7 @@ public class EvsAbbTerraAcImplTest {
 						0x0000, // Socket Lock State
 						0x0111, //
 						0x0000, // Charging State
-						0x0900, //
+						0x9000, //
 						0x0000, // Charging Current Limit
 						0x277F, // 10111 mA
 						0x0000, // Charging Current L1 
@@ -147,7 +147,12 @@ public class EvsAbbTerraAcImplTest {
 	public void testChargingState() throws Exception {
 		this.componentTest.activate(CONFIG)
 		.next(new TestCase()//
-				.output(EvcsAbbTerraAc.ChannelId.CHARGING_STATE, 0x0900L)
+				.output(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE, false)
+				.output(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1, false)
+				.output(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2, false)
+				.output(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1, false)
+				.output(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2, true)
+				.output(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT, true)
 				)
 		.deactivate();
 

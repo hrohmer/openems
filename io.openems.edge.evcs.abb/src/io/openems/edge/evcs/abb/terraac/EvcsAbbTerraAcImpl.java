@@ -1,6 +1,8 @@
 package io.openems.edge.evcs.abb.terraac;
 
 import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUTE_WRITE;
+import static io.openems.edge.evcs.api.EvcsUtils.milliampereToWatt;
+import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
 
 import java.nio.ByteBuffer;
@@ -32,6 +34,7 @@ import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.AbstractModbusElement;
+import io.openems.edge.bridge.modbus.api.element.BitsWordElement;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
@@ -46,6 +49,7 @@ import io.openems.edge.evcs.api.Evcs;
 import io.openems.edge.evcs.api.EvcsPower;
 import io.openems.edge.evcs.api.ManagedEvcs;
 import io.openems.edge.evcs.api.Phases;
+import io.openems.edge.evcs.api.Status;
 import io.openems.edge.evcs.api.WriteHandler;
 import io.openems.edge.meter.api.ElectricityMeter;
 
@@ -141,6 +145,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		this._setChargingType(ChargingType.AC);
 		this._setFixedMaximumHardwarePower(this.getConfiguredMaximumHardwarePower());
 		this._setFixedMinimumHardwarePower(this.getConfiguredMinimumHardwarePower());
+		this._setMinimumPower(milliampereToWatt(this.config.minHwCurrent(), 3));
+		this._setMaximumPower(milliampereToWatt(this.config.maxHwCurrent(), 3));
 		this._setPowerPrecision(0.23D);
 		this._setPhases(Phases.THREE_PHASE);
 	}
@@ -151,6 +157,24 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			switch (event.getTopic()) {
 			case TOPIC_CYCLE_EXECUTE_WRITE:
 				this.writeHandler.run();
+				break;
+			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
+				if (this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE).value().asEnum() != ErrorCodes.NONE) {
+					_setStatus(Status.ERROR);
+				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE).value().get()) {					
+					_setStatus(Status.NOT_READY_FOR_CHARGING);
+				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1).value().get()) {					
+					_setStatus(Status.NOT_READY_FOR_CHARGING);
+				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2).value().get()) {					
+					_setStatus(Status.NOT_READY_FOR_CHARGING);
+				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1).value().get()) {					
+					_setStatus(Status.READY_FOR_CHARGING);
+				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2).value().get()) {					
+					_setStatus(Status.CHARGING);
+				} else {
+					_setStatus(Status.UNDEFINED);
+				}
+				_setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				break;
 			}
 		}
@@ -299,7 +323,14 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
 				this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
 				this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
-				this.m(EvcsAbbTerraAc.ChannelId.CHARGING_STATE), //
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C, DEVICE_START_ADDRESS | 0x0021), //
+				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this)) //
+					.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
+					.bit(9, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1) //
+					.bit(10, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2) //
+					.bit(11, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1) //
+					.bit(12, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2) //
+					.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT), //
 				this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT), //
 				this.m(ElectricityMeter.ChannelId.CURRENT_L1,
 						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0010),

@@ -323,7 +323,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
 				this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
 				this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C, DEVICE_START_ADDRESS | 0x0021), //
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C, DEVICE_START_ADDRESS | 0x000C), //
 				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this)) //
 					.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
 					.bit(9, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1) //

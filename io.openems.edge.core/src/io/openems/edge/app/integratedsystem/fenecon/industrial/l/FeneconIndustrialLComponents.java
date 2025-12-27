@@ -72,13 +72,14 @@ public final class FeneconIndustrialLComponents {
 
 	/**
 	 * Creates a default cycle component for a FENECON Industrial L.
-	 * 
+	 *
+	 * @param cycleTime the Cycle Time
 	 * @return the {@link Component}
 	 */
-	public static Component cycle() {
+	public static Component cycle(int cycleTime) {
 		return new Component(Cycle.SINGLETON_COMPONENT_ID, Cycle.SINGLETON_SERVICE_PID, Cycle.SINGLETON_SERVICE_PID, //
 				JsonUtils.buildJsonObject() //
-						.addProperty("cycleTime", 200) //
+						.addProperty("cycleTime", cycleTime) //
 						.build());
 	}
 
@@ -145,7 +146,7 @@ public final class FeneconIndustrialLComponents {
 			final ResourceBundle bundle, //
 			final boolean isNewHardware //
 	) {
-		return new Component(ioId, translate(bundle, "App.Hardware.IoGpio.Name"), "IO.Gpio", //
+		return new Component(ioId, translate(bundle, "App.FENECON.Industrial.io0"), "IO.Gpio", //
 				JsonUtils.buildJsonObject() //
 						.addProperty("enabled", true) //
 						.addProperty("gpioPath", "/sys/class") //
@@ -280,15 +281,7 @@ public final class FeneconIndustrialLComponents {
 						.addProperty("coolingUnitModbus.id", coolingUnitModbusId) //
 						.addProperty("coolingUnitModbusUnitId", 1) //
 						.addProperty("coolingUnitMode", "ENABLED") //
-						.addProperty("acknowledgeEmergencyStop", "io0/DigitalOutput2") //
-						.addProperty("emergencyStopState", "io0/DigitalInput3") //
-						.addProperty("spdTripped", "io0/DigitalInput2") //
-						.addProperty("fuseTripped", "io0/DigitalInput4") //
-						.addProperty("psuTriggered", "io0/DigitalInput1") //
 						.addProperty("isSmokeDetectionInstalled", isSmokeDetectionInstalled) //
-						.addProperty("smokeDetection", "io0/DigitalInputOutput1") //
-						.addProperty("smokeDetectionFailure", "io0/DigitalInputOutput2") //
-						.addProperty("bmsHardReset", "io0/DigitalOutput1") //
 						.onlyIf(t == ConfigurationTarget.ADD, b -> b.addProperty("startStop", "STOP")) //
 						.add("battery.ids", IntStream.range(0, numberOfBatteries) //
 								.mapToObj(i -> new JsonPrimitive("battery" + (i + 1))) //

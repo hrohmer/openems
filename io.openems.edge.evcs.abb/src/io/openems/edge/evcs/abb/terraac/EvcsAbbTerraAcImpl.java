@@ -183,7 +183,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				logger.warn("Set state to: {}", this.getStatus());
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				
-				this._setEnergySession(Optional.of(getActiveConsumptionEnergy().get()).orElse(Long.valueOf(0)).intValue());
+				this._setEnergySession(Optional.ofNullable(getActiveConsumptionEnergy().get()).orElse(Long.valueOf(0)).intValue());
 				break;
 			}
 		}
@@ -235,7 +235,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		}
 		
 		setSetChargingCurrentLimit(currentForLoad);
-		setStartStop(power > 0 ? StartStop.START : StartStop.STOP);
+		setStartStop(currentForLoad > 0 ? StartStop.START : StartStop.STOP);
 
 		// set timeout to 120 seconds. After 120 seconds without communication the fallback limit is used for charging
 		setCommunicationTimeout(120);		

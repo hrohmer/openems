@@ -40,6 +40,7 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.common.channel.Channel;
+import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.value.Value;
@@ -312,7 +313,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetChargingCurrentLimitChannel().setNextWriteValue(chargingCurrent);
 	}
 	
-	private IntegerWriteChannel getSetStartStopChannel() {
+	private EnumWriteChannel getSetStartStopChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_START_STOP);
 	}
 	
@@ -324,7 +325,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT);
 	}
 	
-	private void setCommunicationTimeout(int value) throws OpenemsNamedException {
+	private void setCommunicationTimeout(Integer value) throws OpenemsNamedException {
 		getSetCommunicationTimeoutChannel().setNextWriteValue(value);
 	}
 
@@ -332,11 +333,11 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT);
 	}
 	
-	private void setFallbackLimit(int value) throws OpenemsNamedException {
+	private void setFallbackLimit(Integer value) throws OpenemsNamedException {
 		getSetFallbackLimitChannel().setNextWriteValue(value);
 	}
 
-	private IntegerWriteChannel getSetLockUnlockSocketCableChannel() {
+	private EnumWriteChannel getSetLockUnlockSocketCableChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE);
 	}
 	

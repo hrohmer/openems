@@ -6,6 +6,7 @@ import static io.openems.edge.evcs.api.EvcsUtils.milliampereToWatt;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
 
 import java.text.MessageFormat;
+import java.util.Optional;
 
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
@@ -181,7 +182,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				logger.warn("Set state to: {}", this.getStatus());
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				
-				this._setEnergySession(getActiveConsumptionEnergy().get().intValue());
+				this._setEnergySession(Optional.of(getActiveConsumptionEnergy().get()).orElse(Long.valueOf(0)).intValue());
 				break;
 			}
 		}
@@ -226,20 +227,25 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			applyDisplayText(getErrorChannel().value().asEnum().getName());
 			
 		} else {
-			
-			final Double currentMilliampere = 1000.0D * (power / Math.sqrt(this.getPhasesAsInt()) / Evcs.DEFAULT_VOLTAGE);
+			final Double currentMilliampere = 1000.0D * (power / this.getPhasesAsInt() / Evcs.DEFAULT_VOLTAGE);
 			currentForLoad = Math.min(currentMilliampere.intValue(), this.config.maxHwCurrent());
 			this.logger.info("Set current charging limit to: {}mA", currentForLoad);
 			applyDisplayText(MessageFormat.format("Loading with {0,number}mA", currentForLoad));
 		}
 		
 		setSetChargingCurrentLimit(currentForLoad);
-		this.channel(EvcsAbbTerraAc.ChannelId.SET_START_STOP).setNextValue(power > 0 ? StartStop.START : StartStop.STOP);
+		setStartStop(power > 0 ? StartStop.START : StartStop.STOP);
 
 		// set timeout to 120 seconds. After 120 seconds without communication the fallback limit is used for charging
-		this.channel(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT).setNextValue(120);		
+		setCommunicationTimeout(120);		
 		// set to 50% of current load or min HW Current if less
-		this.channel(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT).setNextValue(Math.max(this.config.minHwCurrent(), Double.valueOf(currentForLoad / 2000).intValue()));
+		setFallbackLimit(Math.max(this.config.minHwCurrent(), Double.valueOf(currentForLoad / 2000).intValue()));
+		
+		/**
+		 * handling for socket lock stuff
+		 * TODO
+		 */ 
+		//setLockUnlockSocketCableLimit();
 		
 		return currentForLoad > 0;
 	}
@@ -290,20 +296,52 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return getChargingCurrentLimitChannel().value();
 	}
 	
-	private IntegerWriteChannel getSetChargingCurrentLimitChannel() {
-		return this.channel(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT);
-	}
-	
-	private void setSetChargingCurrentLimit(int chargingCurrent) {
-		getSetChargingCurrentLimitChannel().setNextValue(chargingCurrent);
-	}
-	
 	private IntegerReadChannel getChargingCurrentLimitModbusChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS);
 	}
 
 	private Value<Integer> getChargingCurrentLimitModbus() {
 		return getChargingCurrentLimitModbusChannel().value();
+	}
+
+	private IntegerWriteChannel getSetChargingCurrentLimitChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT);
+	}
+	
+	private void setSetChargingCurrentLimit(Integer chargingCurrent) throws OpenemsNamedException {
+		getSetChargingCurrentLimitChannel().setNextWriteValue(chargingCurrent);
+	}
+	
+	private IntegerWriteChannel getSetStartStopChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.SET_START_STOP);
+	}
+	
+	private void setStartStop(StartStop value) throws OpenemsNamedException {
+		getSetStartStopChannel().setNextWriteValue(value != null ? value.getValue() : StartStop.STOP.getValue());
+	}
+
+	private IntegerWriteChannel getSetCommunicationTimeoutChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT);
+	}
+	
+	private void setCommunicationTimeout(int value) throws OpenemsNamedException {
+		getSetCommunicationTimeoutChannel().setNextWriteValue(value);
+	}
+
+	private IntegerWriteChannel getSetFallbackLimitChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT);
+	}
+	
+	private void setFallbackLimit(int value) throws OpenemsNamedException {
+		getSetFallbackLimitChannel().setNextWriteValue(value);
+	}
+
+	private IntegerWriteChannel getSetLockUnlockSocketCableChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE);
+	}
+	
+	private void setLockUnlockSocketCableLimit(LockUnlockSocketCable value) throws OpenemsNamedException {
+		getSetLockUnlockSocketCableChannel().setNextWriteValue(value != null ? value.getValue() : LockUnlockSocketCable.UNLOCK.getValue());
 	}
 
 	/*

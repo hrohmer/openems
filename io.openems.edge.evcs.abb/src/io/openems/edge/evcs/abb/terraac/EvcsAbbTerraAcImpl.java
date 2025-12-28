@@ -240,7 +240,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		// set timeout to 120 seconds. After 120 seconds without communication the fallback limit is used for charging
 		setCommunicationTimeout(120);		
 		// set to 50% of current load or min HW Current if less
-		setFallbackLimit(Math.max(this.config.minHwCurrent(), Double.valueOf(currentForLoad / 2000).intValue()));
+		setFallbackLimit(Double.valueOf(Math.max(this.config.minHwCurrent() / 1000.0d, currentForLoad / 2000.0d)).intValue());
 		
 		/**
 		 * handling for socket lock stuff

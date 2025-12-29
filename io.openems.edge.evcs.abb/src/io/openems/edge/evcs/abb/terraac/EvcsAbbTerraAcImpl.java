@@ -199,6 +199,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				}				
 				logger.warn("Set state to: {}", this.getStatus());
 
+				
+				
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				// This register (401Eh = Active Consumption Energy) provides the transferred energy of the current charging session.
 				this._setEnergySession(Optional.ofNullable(getActiveConsumptionEnergy().get()).orElse(Long.valueOf(0)).intValue());
@@ -442,6 +444,13 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		);
 	}
 
+	private String helper(Boolean[] bs) {
+		if (bs == null) {
+			return "<null>";
+		} else {
+			return Stream.of(bs).map(b -> b != null ? b.toString() : Boolean.FALSE.toString()).collect(Collectors.joining(","));
+		}
+	}
 	private FC3ReadRegistersTask getDeviceMeasurementTask() {
 		return new FC3ReadRegistersTask(0x4006, Priority.HIGH, //
 				this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
@@ -449,7 +458,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
 //				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
 				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000C, this) //
-					.onUpdateCallback(v -> logger.info("Next bit values of 0x000C: {}", Stream.of(v).map(b -> b.toString()).collect(Collectors.joining(","))))), //
+					.onUpdateCallback(v -> logger.info("Next bit values of 0x000C: {}", helper(v)))), //
 				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this) //
 					.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
 					.bit(9, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1) //
@@ -457,7 +466,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 					.bit(11, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1) //
 					.bit(12, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2) //
 					.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT) //
-					.onUpdateCallback(v -> logger.info("Next bit values of 0x000D: {}", Stream.of(v).map(b -> b.toString()).collect(Collectors.joining(","))))), //
+					.onUpdateCallback(v -> logger.info("Next bit values of 0x000D: {}", helper(v)))), //
 				this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT), //
 				this.m(ElectricityMeter.ChannelId.CURRENT_L1,
 						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0010),

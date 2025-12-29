@@ -7,6 +7,9 @@ import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE
 
 import java.text.MessageFormat;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
@@ -26,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
-import io.openems.common.exceptions.OpenemsException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
@@ -126,12 +128,16 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		 */
 		getModbusProtocol().addTask(new FC3ReadRegistersTask(0x4000, Priority.HIGH, //
 				getSerialNumberModbusRegsiterElement()));
+		
+		getSetDisplayTextChannel().onSetNextWrite(s -> logger.info("New display text: {}", s));
+		
 	}
 
 	@Deactivate
 	@Override
 	protected void deactivate() {
 		super.deactivate();
+		
 	}
 
 	@Modified
@@ -146,22 +152,33 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	
 	private void applyConfig(Config config) {
 		this.config = config;
+		final Phases phases = Phases.THREE_PHASE;
 		this._setChargingType(ChargingType.AC);
+		this._setPhases(phases);
 		this._setFixedMaximumHardwarePower(this.getConfiguredMaximumHardwarePower());
 		this._setFixedMinimumHardwarePower(this.getConfiguredMinimumHardwarePower());
-		this._setMinimumPower(milliampereToWatt(this.config.minHwCurrent(), 3));
-		this._setMaximumPower(milliampereToWatt(this.config.maxHwCurrent(), 3));
+		this._setMinimumPower(milliampereToWatt(this.config.minHwCurrent(), phases.getValue()));
+		this._setMaximumPower(milliampereToWatt(this.config.maxHwCurrent(), phases.getValue()));
 		this._setPowerPrecision(0.23D);
-		this._setPhases(Phases.THREE_PHASE);
 		this._setStatus(Status.UNDEFINED);
+		// make sure the energy limit is reset
+		this.getSetEnergyLimitChannel().getNextWriteValueAndReset();
+		
+		try {
+			setAbbFallback();
+		} catch (OpenemsNamedException e) {
+			logger.error("Error while set the ABB fallback limits:", e);
+		}
 	}
 
 	@Override
 	public void handleEvent(Event event) {
-		if (this.config.enabled() && !this.config.readOnly()) {
+		if (this.config.enabled()) {
 			switch (event.getTopic()) {
 			case TOPIC_CYCLE_EXECUTE_WRITE:
-				this.writeHandler.run();
+				if (!this.config.readOnly()) {
+					this.writeHandler.run();
+				}
 				break;
 				
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
@@ -179,10 +196,11 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 					this._setStatus(Status.CHARGING);
 				} else {
 					this._setStatus(Status.NOT_READY_FOR_CHARGING);
-				}
+				}				
 				logger.warn("Set state to: {}", this.getStatus());
+
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
-				
+				// This register (401Eh = Active Consumption Energy) provides the transferred energy of the current charging session.
 				this._setEnergySession(Optional.ofNullable(getActiveConsumptionEnergy().get()).orElse(Long.valueOf(0)).intValue());
 				break;
 			}
@@ -212,54 +230,64 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 	@Override
 	public boolean applyChargePowerLimit(int power) throws Exception {
-		logger.info("Got new charging power limit: {}mW", power);
+		logger.info("Got new charging power limit: {} W", power);
+		
+		
+		if (power > 0 && isInPauseChargeProcess.get()) {
+			setStartStop(StartStop.START);
+			isInPauseChargeProcess.set(false);
+			
+		}
 		
 		int currentForLoad = 0;
 		
-		final ConnectorType type = getConnectorType().value().asEnum();
-		if (this.config.readOnly()) {
-			applyDisplayText("This EVCS is in readonly mode");
-		
-		} else if (( type == ConnectorType.TYPE_2_S || type == ConnectorType.TYPE_2_T) && 
-				getLockState().value().asEnum() != LockState.CABLE_CONNECTED_CHARGING_STATION_LOCKED_ELECTRIC_VEHICLE) {
-			applyDisplayText("Socket connection not ready: " + getLockState().value().asEnum().getName());
-			
-		} else if (getErrorChannel().value().asEnum() != ErrorCodes.NONE) {
-			applyDisplayText(getErrorChannel().value().asEnum().getName());
-			
-		} else {
+//		final ConnectorType type = getConnectorType().value().asEnum();
+//		} else if (( type == ConnectorType.TYPE_2_S || type == ConnectorType.TYPE_2_T) && 
+//				getLockState().value().asEnum() != LockState.CABLE_CONNECTED_CHARGING_STATION_LOCKED_ELECTRIC_VEHICLE) {
+//			applyDisplayText("Socket connection not ready: " + getLockState().value().asEnum().getName());
+//			
+//		} else if (getErrorChannel().value().asEnum() != ErrorCodes.NONE) {
+//			applyDisplayText(getErrorChannel().value().asEnum().getName());
+//			
+//		} else {
 			final Double currentMilliampere = 1000.0D * (power / this.getPhasesAsInt() / Evcs.DEFAULT_VOLTAGE);
 			currentForLoad = Math.min(currentMilliampere.intValue(), this.config.maxHwCurrent());
-			this.logger.info("Set current charging limit to: {}mA", currentForLoad);
-			applyDisplayText(MessageFormat.format("Loading with {0,number}mA", currentForLoad));
-		}
+			this.logger.info("Set current charging limit to: {} mA", currentForLoad);
+//			applyDisplayText(MessageFormat.format("Loading with {0,number}mA", currentForLoad));
+//		}
 		
 		setSetChargingCurrentLimit(currentForLoad);
-		setStartStop(currentForLoad > 0 ? StartStop.START : StartStop.STOP);
 
-		// set timeout to 120 seconds. After 120 seconds without communication the fallback limit is used for charging
-		setCommunicationTimeout(120);		
-		// set to 50% of current load or min HW Current if less
-		setFallbackLimit(Double.valueOf(Math.max(this.config.minHwCurrent() / 1000.0d, currentForLoad / 2000.0d)).intValue());
-		
 		/**
 		 * handling for socket lock stuff
 		 * TODO
 		 */ 
 		//setLockUnlockSocketCableLimit();
 		
-		return currentForLoad > 0;
+		return true;
 	}
 
+	final AtomicBoolean isInPauseChargeProcess = new AtomicBoolean(false);
+	
 	@Override
 	public boolean pauseChargeProcess() throws Exception {
-		return applyChargePowerLimit(0);
+		
+		if (!isInPauseChargeProcess.get()) {
+			setStartStop(StartStop.STOP);
+			isInPauseChargeProcess.set(true);
+			return applyChargePowerLimit(0);
+		}
+		
+		return true;
 	}
 
 	@Override
-	public boolean applyDisplayText(String text) throws OpenemsException {
-		logger.info("EVCS display text: {}", text);
-		return true;
+	public boolean applyDisplayText(String text) {
+		try {
+			setDisplayText(text);
+		} catch (OpenemsNamedException e) {
+		}
+		return false;
 	}
 
 	@Override
@@ -267,13 +295,32 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return 30;
 	}
 
+	
+	@Override
+	public boolean isReadOnly() {
+		return this.config != null ? this.config.readOnly() : false; 
+	}
+
 	@Override
 	public ChargeStateHandler getChargeStateHandler() {
 		return this.chargeStateHandler;
 	}
 
+	private void setAbbFallback() throws OpenemsNamedException {
+		if (config.enabled() && !config.readOnly()) {
+
+			// set timeout to 120 seconds. After 120 seconds without communication the fallback limit is used for charging
+			setCommunicationTimeout(120);		
+			
+			// set to 50% between min and max HW Current if less
+			setFallbackLimit(Double.valueOf((this.config.minHwCurrent() + this.config.maxHwCurrent()) / 2000.0d).intValue());
+			
+			
+		}
+	}
+	
 	/*
-	 * === Logging ===========================================================
+	 * === Channels ===========================================================
 	 */
 	
 	private Channel<ErrorCodes> getErrorChannel() {
@@ -400,14 +447,17 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
 				this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
 				this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
-				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this)) //
+//				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
+				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000C, this) //
+					.onUpdateCallback(v -> logger.info("Next bit values of 0x000C: {}", Stream.of(v).map(b -> b.toString()).collect(Collectors.joining(","))))), //
+				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this) //
 					.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
 					.bit(9, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1) //
 					.bit(10, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2) //
 					.bit(11, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1) //
 					.bit(12, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2) //
-					.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT), //
+					.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT) //
+					.onUpdateCallback(v -> logger.info("Next bit values of 0x000D: {}", Stream.of(v).map(b -> b.toString()).collect(Collectors.joining(","))))), //
 				this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT), //
 				this.m(ElectricityMeter.ChannelId.CURRENT_L1,
 						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0010),

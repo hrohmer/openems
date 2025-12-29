@@ -5,7 +5,6 @@ import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUT
 import static io.openems.edge.evcs.api.EvcsUtils.milliampereToWatt;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
 
-import java.text.MessageFormat;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
@@ -41,7 +40,9 @@ import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
+import io.openems.edge.common.channel.BooleanReadChannel;
 import io.openems.edge.common.channel.Channel;
+import io.openems.edge.common.channel.EnumReadChannel;
 import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
@@ -131,6 +132,16 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		
 		getSetDisplayTextChannel().onSetNextWrite(s -> logger.info("New display text: {}", s));
 		
+		if (!config.readOnly()) {
+			// make sure the energy limit is reset
+			this.getSetEnergyLimitChannel().getNextWriteValueAndReset();
+			
+			// set the start/stop flag initially
+			setStartStop(StartStop.STOP);
+			isInPauseChargeProcess.set(getConfiguredDebugMode());
+			// set ABB fallback values initially
+			setAbbFallback();
+		}
 	}
 
 	@Deactivate
@@ -161,14 +172,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		this._setMaximumPower(milliampereToWatt(this.config.maxHwCurrent(), phases.getValue()));
 		this._setPowerPrecision(0.23D);
 		this._setStatus(Status.UNDEFINED);
-		// make sure the energy limit is reset
-		this.getSetEnergyLimitChannel().getNextWriteValueAndReset();
-		
-		try {
-			setAbbFallback();
-		} catch (OpenemsNamedException e) {
-			logger.error("Error while set the ABB fallback limits:", e);
-		}
 	}
 
 	@Override
@@ -184,23 +187,28 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
 				if (ErrorCodes.NONE.compareTo(getErrorChannel().value().asEnum()) != 0) {
 					this._setStatus(Status.ERROR);
-				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE).value().get()) {					
+				
+				} else if (isChargingStateIdle()) {					
 					this._setStatus(Status.NOT_READY_FOR_CHARGING);
-				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1).value().get()) {					
-					this._setStatus(Status.NOT_READY_FOR_CHARGING);
-				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2).value().get()) {					
-					this._setStatus(Status.NOT_READY_FOR_CHARGING);
-				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1).value().get()) {					
+				} else if (isChargingStateB1()) {					
+					this._setStatus(Status.CHARGING_REJECTED);
+				} else if (isChargingStateB2()) {
+					// if in state B2 and connector is cable the state is 'charging' most likely
+					if (getConnectorType().compareTo(ConnectorType.TYPE_1_P) == 0 || 
+							getConnectorType().compareTo(ConnectorType.TYPE_2_G) == 0) {
+						this._setStatus(Status.CHARGING);
+					} else {
+						this._setStatus(Status.READY_FOR_CHARGING);						
+					}
+				} else if (isChargingStateC1()) {					
 					this._setStatus(Status.READY_FOR_CHARGING);
-				} else if ((boolean) this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2).value().get()) {					
+				} else if (isChargingStateC2()) {					
 					this._setStatus(Status.CHARGING);
 				} else {
 					this._setStatus(Status.NOT_READY_FOR_CHARGING);
 				}				
 				logger.warn("Set state to: {}", this.getStatus());
 
-				
-				
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				// This register (401Eh = Active Consumption Energy) provides the transferred energy of the current charging session.
 				this._setEnergySession(Optional.ofNullable(getActiveConsumptionEnergy().get()).orElse(Long.valueOf(0)).intValue());
@@ -329,10 +337,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE);
 	}
 
-	private Channel<ConnectorType> getConnectorType() {
-		return this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE);
-	}
-	
 	private Channel<LockState> getLockState() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE);
 	}
@@ -390,8 +394,56 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE);
 	}
 	
-	private void setLockUnlockSocketCableLimit(LockUnlockSocketCable value) throws OpenemsNamedException {
+	private void setLockUnlockSocketCable(LockUnlockSocketCable value) throws OpenemsNamedException {
 		getSetLockUnlockSocketCableChannel().setNextWriteValue(value != null ? value.getValue() : LockUnlockSocketCable.UNLOCK.getValue());
+	}
+
+	private EnumReadChannel getConnectorTypeChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE);
+	}
+	
+	private ConnectorType getConnectorType() {
+		return getConnectorTypeChannel().value().asEnum();
+	}
+	
+	private BooleanReadChannel getChargingStateIdleChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE);
+	}
+	
+	private boolean isChargingStateIdle() {
+		return getChargingStateIdleChannel().value().orElse(Boolean.FALSE);
+	}
+
+	private BooleanReadChannel getChargingStateB1Channel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1);
+	}
+	
+	private boolean isChargingStateB1() {
+		return getChargingStateB1Channel().value().orElse(Boolean.FALSE);
+	}
+
+	private BooleanReadChannel getChargingStateB2Channel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2);
+	}
+	
+	private boolean isChargingStateB2() {
+		return getChargingStateB2Channel().value().orElse(Boolean.FALSE);
+	}
+
+	private BooleanReadChannel getChargingStateC1Channel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1);
+	}
+	
+	private boolean isChargingStateC1() {
+		return getChargingStateC1Channel().value().orElse(Boolean.FALSE);
+	}
+
+	private BooleanReadChannel getChargingStateC2Channel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2);
+	}
+	
+	private boolean isChargingStateC2() {
+		return getChargingStateC2Channel().value().orElse(Boolean.FALSE);
 	}
 
 	/*
@@ -456,9 +508,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
 				this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
 				this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
-//				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
-				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000C, this) //
-					.onUpdateCallback(v -> logger.info("Next bit values of 0x000C: {}", helper(v)))), //
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
 				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this) //
 					.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
 					.bit(9, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1) //
@@ -520,7 +570,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR).setNextValue(null);
 				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK).setNextValue(null);
 				this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER).setNextValue(null);
-				this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE).setNextValue(null);
+				getConnectorTypeChannel().setNextValue(null);
 			} else {
 				final Long serialNumber = Long.class.cast(value);
 //				logger.warn("SerialNumberBLock: 0x{}", HexFormat.of().formatHex(ByteBuffer.allocate(Long.BYTES).putLong(serialNumber).array()));
@@ -530,7 +580,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK)
 					.setNextValue((serialNumber.longValue() >> 24) & 0xFF);
 				this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER).setNextValue((serialNumber.longValue() >> 48) & 0xFF);
-				this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE).setNextValue((serialNumber.longValue() >> 56) & 0xFF);
+				getConnectorTypeChannel().setNextValue((serialNumber.longValue() >> 56) & 0xFF);
 			}
 		});
 	}

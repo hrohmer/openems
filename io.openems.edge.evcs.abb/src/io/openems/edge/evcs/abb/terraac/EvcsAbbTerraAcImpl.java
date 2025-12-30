@@ -186,7 +186,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				break;
 				
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-				if (ErrorCodes.NONE.compareTo(getErrorChannel().value().asEnum()) != 0) {
+				if (ErrorCodes.NONE.compareTo(getError()) != 0) {
 					this._setStatus(Status.ERROR);
 				
 				} else if (isChargingStateIdle()) {					
@@ -550,20 +550,20 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4000, Priority.LOW, //
 				this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER),
 				this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK).onUpdateCallback(v -> {
-					if (v != null) {
-						final Long value = Long.class.cast(v);
-						setProductionYear(Long.valueOf(value & 0xFF).intValue());
-						setProductionWeek(Long.valueOf((value >> 16) & 0xFF).intValue());
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						setProductionYear(value & 0xFF);
+						setProductionWeek((value >> 16) & 0xFF);
 					}
 				}),
 				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0002));
 	
 	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4003, Priority.HIGH, //
 				this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK).onUpdateCallback(v -> {
-					if (v != null) {
-						final Long value = Long.class.cast(v);
-						setRatedPower(RatedPower.byValue(Long.valueOf(value & 0xFF).intValue()));
-						setConnectorType(ConnectorType.byValue(Long.valueOf((value >> 16) & 0xFF).intValue()));
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						setRatedPower(RatedPower.byValue(value & 0xFF));
+						setConnectorType(ConnectorType.byValue((value >> 16) & 0xFF));
 					}
 				}),
 				this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION) //

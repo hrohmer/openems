@@ -429,7 +429,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR);
 	}
 	
-	private void setProductionYear(int value) {
+	private void setProductionYear(short value) {
 		getProductionYearChannel().setNextValue(value);
 	}
 	
@@ -437,7 +437,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK);
 	}
 	
-	private void setProductionWeek(int value) {
+	private void setProductionWeek(short value) {
 		getProductionWeekChannel().setNextValue(value);
 	}
 	
@@ -567,8 +567,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 					if (v != null && v instanceof Integer) {
 						final Integer value = Integer.class.cast(v);
 						logger.info("Production block: 0x{}", Integer.toHexString(value));
-						setProductionYear(value & 0xFF);
-						setProductionWeek((value >> 16) & 0xFF);
+						setProductionYear(Integer.valueOf(value & 0xFF).shortValue());
+						setProductionWeek(Integer.valueOf((value >> 16) & 0xFF).shortValue());
 					}
 				}),
 				this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT).onUpdateCallback(v -> {

@@ -548,8 +548,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	protected ModbusProtocol defineModbusProtocol() {
 		final ModbusProtocol modbusProtocol = new ModbusProtocol(this);
 		
-		modbusProtocol.addTask(deviceInformationTask);
 		modbusProtocol.addTask(deviceTypeTask);
+		modbusProtocol.addTask(deviceInformationTask);
 		modbusProtocol.addTask(deviceMeasurementTask);
 		if (!this.config.readOnly()) {
 			modbusProtocol.addTask(deviceControlTask);
@@ -557,98 +557,99 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return modbusProtocol;
 	}
 
-	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4000, Priority.LOW, //
-				this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).onUpdateCallback(v -> {
-					if (v != null && v instanceof Integer) {
-						final Integer value = Integer.class.cast(v);
-						logger.info("Serial number: 0x{}", Integer.toHexString(value));
-					}					
-				}),
-				this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK).onUpdateCallback(v -> {
-					if (v != null && v instanceof Integer) {
-						final Integer value = Integer.class.cast(v);
-						logger.info("Production block: 0x{}", Integer.toHexString(value));
-						setProductionYear(Integer.valueOf(value & 0xFF).shortValue());
-						setProductionWeek(Integer.valueOf((value >> 16) & 0xFF).shortValue());
-					}
-				}),
-				this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT).onUpdateCallback(v -> {
-					if (v != null && v instanceof Integer) {
-						final Integer value = Integer.class.cast(v);
-						logger.info("PlantID & Spare: 0x{}", Integer.toHexString(value));
-					}					
-				}));
+	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4001, Priority.LOW, //
+			this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT).onUpdateCallback(v -> {
+				if (v != null && v instanceof Integer) {
+					final Integer value = Integer.class.cast(v);
+					logger.info("PlantID & Spare: 0x{}", Integer.toHexString(value));
+				}					
+			}), //
+			this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK).onUpdateCallback(v -> {
+				if (v != null && v instanceof Integer) {
+					final Integer value = Integer.class.cast(v);
+					logger.info("Production block: 0x{}", Integer.toHexString(value));
+					setProductionYear(Integer.valueOf(value & 0xFF).shortValue());
+					setProductionWeek(Integer.valueOf((value >> 16) & 0xFF).shortValue());
+				}
+			}),
+			this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).onUpdateCallback(v -> {
+				if (v != null && v instanceof Integer) {
+					final Integer value = Integer.class.cast(v);
+					logger.info("Serial number: 0x{}", Integer.toHexString(value));
+				}					
+			}),
+			this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION).onUpdateCallback(v -> {
+				if (v != null && v instanceof Long) {
+					final Long value = Long.class.cast(v);
+					logger.info("Firmware version: 0x{}", Long.toHexString(value));						
+				}
+			}) //
+		);
 	
-	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4003, Priority.HIGH, //
-				this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK).onUpdateCallback(v -> {
-					if (v != null && v instanceof Integer) {
-						final Integer value = Integer.class.cast(v);
-						logger.info("Type block: 0x{}", Integer.toHexString(value));
-						setRatedPower(RatedPower.byValue(value & 0xFF));
-						setConnectorType(ConnectorType.byValue((value >> 16) & 0xFF));
-					}
-				}),
-				this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION).onUpdateCallback(v -> {
-					if (v != null && v instanceof Long) {
-						final Long value = Long.class.cast(v);
-						logger.info("Firmware version: 0x{}", Long.toHexString(value));						
-					}
-				}) //
+	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4000, Priority.HIGH, //
+			this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK).onUpdateCallback(v -> {
+				if (v != null && v instanceof Integer) {
+					final Integer value = Integer.class.cast(v);
+					logger.info("Type block: 0x{}", Integer.toHexString(value));
+					setRatedPower(RatedPower.byValue(value & 0xFF));
+					setConnectorType(ConnectorType.byValue((value >> 16) & 0xFF));
+				}
+			})
 		);
 
 	private final FC3ReadRegistersTask deviceMeasurementTask = new FC3ReadRegistersTask(0x4006, Priority.HIGH, //
-				this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
-				this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
-				this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
-				this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this) //
-					.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
-					.bit(9, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1) //
-					.bit(10, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2) //
-					.bit(11, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1) //
-					.bit(12, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2) //
-					.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT)), //
-				this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT), //
-				this.m(ElectricityMeter.ChannelId.CURRENT_L1,
-						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0010),
-						ElementToChannelConverter.DIRECT_1_TO_1), //
-				this.m(ElectricityMeter.ChannelId.CURRENT_L2,
-						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0012),
-						ElementToChannelConverter.DIRECT_1_TO_1), //
-				this.m(ElectricityMeter.ChannelId.CURRENT_L3,
-						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0014),
-						ElementToChannelConverter.DIRECT_1_TO_1), //
-				this.m(ElectricityMeter.ChannelId.VOLTAGE_L1,
-						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0016),
-						ElementToChannelConverter.SCALE_FACTOR_2),
-				this.m(ElectricityMeter.ChannelId.VOLTAGE_L2,
-						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0018),
-						ElementToChannelConverter.SCALE_FACTOR_2),
-				this.m(ElectricityMeter.ChannelId.VOLTAGE_L3,
-						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001A),
-						ElementToChannelConverter.SCALE_FACTOR_2),
-				this.m(ElectricityMeter.ChannelId.ACTIVE_POWER,
-						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001C),
-						ElementToChannelConverter.DIRECT_1_TO_1), //
-				this.m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY,
-						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001E),
-						ElementToChannelConverter.DIRECT_1_TO_1), //
-				this.m(EvcsAbbTerraAc.ChannelId.COMMUNICATION_TIMEOUT), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0021), //
-				this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS), //
-				this.m(EvcsAbbTerraAc.ChannelId.FALLBACK_LIMIT),
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0025) //
-				);
+			this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
+			this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
+			this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
+			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
+			this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this) //
+				.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
+				.bit(9, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B1) //
+				.bit(10, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2) //
+				.bit(11, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1) //
+				.bit(12, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2) //
+				.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT)), //
+			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT), //
+			this.m(ElectricityMeter.ChannelId.CURRENT_L1,
+					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0010),
+					ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(ElectricityMeter.ChannelId.CURRENT_L2,
+					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0012),
+					ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(ElectricityMeter.ChannelId.CURRENT_L3,
+					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0014),
+					ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(ElectricityMeter.ChannelId.VOLTAGE_L1,
+					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0016),
+					ElementToChannelConverter.SCALE_FACTOR_2),
+			this.m(ElectricityMeter.ChannelId.VOLTAGE_L2,
+					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0018),
+					ElementToChannelConverter.SCALE_FACTOR_2),
+			this.m(ElectricityMeter.ChannelId.VOLTAGE_L3,
+					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001A),
+					ElementToChannelConverter.SCALE_FACTOR_2),
+			this.m(ElectricityMeter.ChannelId.ACTIVE_POWER,
+					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001C),
+					ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY,
+					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001E),
+					ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.COMMUNICATION_TIMEOUT), //
+			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0021), //
+			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS), //
+			this.m(EvcsAbbTerraAc.ChannelId.FALLBACK_LIMIT),
+			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0025) //
+		);
 
 	private final FC16WriteRegistersTask deviceControlTask = new FC16WriteRegistersTask(0x4100, //
-				this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0102), //
-				this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0104), //
-				this.m(EvcsAbbTerraAc.ChannelId.SET_START_STOP), //
-				this.m(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT), //
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0107, DEVICE_START_ADDRESS | 0x0108), //
-				this.m(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT)
+			this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT), //
+			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0102), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE), //
+			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0104), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_START_STOP), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT), //
+			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0107, DEVICE_START_ADDRESS | 0x0108), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT)
 		);
 
 	/**

@@ -208,7 +208,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				} else {
 					this._setStatus(Status.NOT_READY_FOR_CHARGING);
 				}				
-				logger.warn("Set state to: {}", this.getStatus());
 
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				// This register (401Eh = Active Consumption Energy) provides the transferred energy of the current charging session.
@@ -552,6 +551,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK).onUpdateCallback(v -> {
 					if (v != null && v instanceof Integer) {
 						final Integer value = Integer.class.cast(v);
+						logger.info("Production block: 0x{}", Integer.toHexString(value));
 						setProductionYear(value & 0xFF);
 						setProductionWeek((value >> 16) & 0xFF);
 					}
@@ -562,11 +562,17 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK).onUpdateCallback(v -> {
 					if (v != null && v instanceof Integer) {
 						final Integer value = Integer.class.cast(v);
+						logger.info("Type block: 0x{}", Integer.toHexString(value));
 						setRatedPower(RatedPower.byValue(value & 0xFF));
 						setConnectorType(ConnectorType.byValue((value >> 16) & 0xFF));
 					}
 				}),
-				this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION) //
+				this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION).onUpdateCallback(v -> {
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						logger.info("Firmware version: 0x{}", Integer.toHexString(value));						
+					}
+				}) //
 		);
 
 	private final FC3ReadRegistersTask deviceMeasurementTask = new FC3ReadRegistersTask(0x4006, Priority.HIGH, //

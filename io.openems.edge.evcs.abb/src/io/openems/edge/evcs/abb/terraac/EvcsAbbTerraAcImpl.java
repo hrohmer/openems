@@ -333,6 +333,15 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	 * === Channels ===========================================================
 	 */
 	
+	private IntegerReadChannel getMaxCurrentChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.MAX_CURRENT);
+	}
+	
+	private Integer getMaxCurrent() {
+		return getMaxCurrentChannel().value().orElse(null);
+	}
+	
+
 	private EnumReadChannel getErrorChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE);
 	}
@@ -506,6 +515,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	public String debugLog() {
 		final StringBuilder sb = new StringBuilder() //
 			.append("Power: ").append(this.getActivePower().orElse(null)) //
+			.append("| Max current: ").append(this.getMaxCurrent()) //
 			.append("| RatedPower: ").append(this.getRatedPower()) //
 			.append("| Connector type: ").append(this.getConnectorType()) //
 			.append("| Status:").append(this.getStatus()) //
@@ -547,7 +557,12 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	}
 
 	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4000, Priority.LOW, //
-				this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER),
+				this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).onUpdateCallback(v -> {
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						logger.info("Serial number: 0x{}", Integer.toHexString(value));
+					}					
+				}),
 				this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK).onUpdateCallback(v -> {
 					if (v != null && v instanceof Integer) {
 						final Integer value = Integer.class.cast(v);
@@ -556,7 +571,12 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 						setProductionWeek((value >> 16) & 0xFF);
 					}
 				}),
-				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0002));
+				this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT).onUpdateCallback(v -> {
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						logger.info("PlantID & Spare: 0x{}", Integer.toHexString(value));
+					}					
+				}));
 	
 	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4003, Priority.HIGH, //
 				this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK).onUpdateCallback(v -> {

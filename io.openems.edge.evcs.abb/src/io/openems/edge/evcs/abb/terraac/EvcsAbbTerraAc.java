@@ -34,6 +34,7 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 		PRODUCTION_BLOCK(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The production time block"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		PRODUCTION_DATE_YEAR(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_WRITE).text("The production year"), null, null ),
 		PRODUCTION_DATE_WEEK(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_WRITE).text("The production week of year"), null, null ),
+		SPARE_PLANT(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The Plant ID and Spare"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0002), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		TYPE_BLOCK(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.HIGH).text("The type block"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		CONNECTOR_TYPE(Doc.of(ConnectorType.values()).accessMode(AccessMode.READ_WRITE).text("Connector type"), null, null ),
 		RATED_POWER(Doc.of(RatedPower.values()).accessMode(AccessMode.READ_WRITE).text("Rated power"), null, null ),

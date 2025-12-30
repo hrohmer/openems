@@ -42,6 +42,7 @@ import io.openems.edge.common.channel.EnumReadChannel;
 import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
+import io.openems.edge.common.channel.ShortWriteChannel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.evcs.api.ChargeStateHandler;
@@ -425,7 +426,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetLockUnlockSocketCableChannel().setNextWriteValue(value != null ? value.getValue() : LockUnlockSocketCable.UNLOCK.getValue());
 	}
 
-	private IntegerWriteChannel getProductionYearChannel() {
+	private ShortWriteChannel getProductionYearChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR);
 	}
 	
@@ -433,7 +434,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getProductionYearChannel().setNextValue(value);
 	}
 	
-	private IntegerWriteChannel getProductionWeekChannel() {
+	private ShortWriteChannel getProductionWeekChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK);
 	}
 	

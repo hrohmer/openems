@@ -1,5 +1,7 @@
 package io.openems.edge.evcs.abb.terraac;
 
+import java.util.stream.Stream;
+
 import io.openems.common.types.OptionsEnum;
 
 /**
@@ -46,5 +48,17 @@ public enum ConnectorType implements OptionsEnum {
 	@Override
 	public OptionsEnum getUndefined() {
 		return UNDEFINED;
+	}
+
+	/**
+	 * Helper Method to get the Enum item out if its value.
+	 * 
+	 * @param value the value to look for
+	 * @return the Enum item of {@link #UNDEFINED}
+	 */
+	public static ConnectorType byValue(int value) {
+		return Stream.of(ConnectorType.values()) //
+				.filter(rp -> rp.getValue() == value).findAny() //
+				.orElse(UNDEFINED);
 	}
 }

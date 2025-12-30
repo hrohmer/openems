@@ -7,9 +7,7 @@ import io.openems.common.types.OpenemsType;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
-import io.openems.edge.bridge.modbus.api.element.UnsignedQuadruplewordElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
-import io.openems.edge.bridge.modbus.api.element.WordOrder;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.component.OpenemsComponent;
 
@@ -32,12 +30,13 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		
 		// see Chapter 5.1 Serial Number
-		SERIAL_NUMBER_BLOCK(Doc.of(OpenemsType.LONG).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The serial number block"), new UnsignedQuadruplewordElement(DEVICE_START_ADDRESS | 0x0000).wordOrder(WordOrder.MSWLSW), ElementToChannelConverter.DIRECT_1_TO_1 ),
 		SERIAL_NUMBER(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The serial number"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0000), ElementToChannelConverter.DIRECT_1_TO_1 ),
-		PRODUCTION_DATE_YEAR(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_ONLY).text("The production year"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), null ),
-		PRODUCTION_DATE_WEEK(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_ONLY).text("The production week of year"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), null ),
-		CONNECTOR_TYPE(Doc.of(ConnectorType.values()).accessMode(AccessMode.READ_ONLY).text("Connector type"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), null ),
-		RATED_POWER(Doc.of(RatedPower.values()).accessMode(AccessMode.READ_ONLY).text("Rated power"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), null ),
+		PRODUCTION_BLOCK(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("The production time block"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), ElementToChannelConverter.DIRECT_1_TO_1 ),
+		PRODUCTION_DATE_YEAR(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_WRITE).text("The production year"), null, null ),
+		PRODUCTION_DATE_WEEK(Doc.of(OpenemsType.SHORT).accessMode(AccessMode.READ_WRITE).text("The production week of year"), null, null ),
+		TYPE_BLOCK(Doc.of(OpenemsType.INTEGER).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.HIGH).text("The type block"), new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), ElementToChannelConverter.DIRECT_1_TO_1 ),
+		CONNECTOR_TYPE(Doc.of(ConnectorType.values()).accessMode(AccessMode.READ_WRITE).text("Connector type"), null, null ),
+		RATED_POWER(Doc.of(RatedPower.values()).accessMode(AccessMode.READ_WRITE).text("Rated power"), null, null ),
 		// Word 0x0003 has fixed values
 		
 		FIRMWARE_VERSION(Doc.of(OpenemsType.LONG).accessMode(AccessMode.READ_ONLY).persistencePriority(PersistencePriority.LOW).text("Firmware version"), new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0004), ElementToChannelConverter.DIRECT_1_TO_1 ),

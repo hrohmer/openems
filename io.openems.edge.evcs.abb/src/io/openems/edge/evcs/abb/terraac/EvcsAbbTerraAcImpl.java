@@ -7,8 +7,6 @@ import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
@@ -33,7 +31,6 @@ import io.openems.edge.bridge.modbus.api.BridgeModbus;
 import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
-import io.openems.edge.bridge.modbus.api.element.AbstractModbusElement;
 import io.openems.edge.bridge.modbus.api.element.BitsWordElement;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
@@ -41,12 +38,10 @@ import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.common.channel.BooleanReadChannel;
-import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.channel.EnumReadChannel;
 import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
-import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.evcs.api.ChargeStateHandler;
@@ -124,12 +119,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		 */
 		Evcs.addCalculatePowerLimitListeners(this);
 		
-		/*
-		 * Read the serial number block once
-		 */
-		getModbusProtocol().addTask(new FC3ReadRegistersTask(0x4000, Priority.HIGH, //
-				getSerialNumberModbusRegsiterElement()));
-		
 		getSetDisplayTextChannel().onSetNextWrite(s -> logger.info("New display text: {}", s));
 		
 		if (!config.readOnly()) {
@@ -140,7 +129,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			setStartStop(StartStop.STOP);
 			isInPauseChargeProcess.set(getConfiguredDebugMode());
 			// set ABB fallback values initially
-			setAbbFallback();
+			setAbbTerraAcFallback();
 		}
 	}
 
@@ -153,7 +142,19 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 	@Modified
 	private void modified(ComponentContext context, Config config) throws OpenemsNamedException {
+		final boolean readOnly = this.config != null ? this.config.readOnly() : false;
+		
 		this.applyConfig(config);
+		
+		// in case the readonly flag changes, the modbus protocol needs to be updated
+		if (config.enabled() && readOnly != config.readOnly()) {
+			if (config.readOnly()) {
+				getModbusProtocol().removeTask(deviceControlTask);
+			} else {
+				getModbusProtocol().addTask(deviceControlTask);
+			}
+		}
+		
 		if (super.modified(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
 				"Modbus", config.modbus_id())) {
 			return;
@@ -316,7 +317,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.chargeStateHandler;
 	}
 
-	private void setAbbFallback() throws OpenemsNamedException {
+	private void setAbbTerraAcFallback() throws OpenemsNamedException {
 		if (config.enabled() && !config.readOnly()) {
 
 			// set timeout to 120 seconds. After 120 seconds without communication the fallback limit is used for charging
@@ -333,12 +334,21 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	 * === Channels ===========================================================
 	 */
 	
-	private Channel<ErrorCodes> getErrorChannel() {
+	private EnumReadChannel getErrorChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE);
 	}
 
-	private Channel<LockState> getLockState() {
+	private ErrorCodes getError() {
+		return getErrorChannel().value().asEnum();
+	}
+
+	
+	private EnumReadChannel getLockStateChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE);
+	}
+	
+	private LockState getLockState() {
+		return getLockStateChannel().value().asEnum();
 	}
 	
 	
@@ -346,17 +356,19 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT);
 	}
 	
-	private Value<Integer> getChargingCurrentLimit() {
-		return getChargingCurrentLimitChannel().value();
+	private Integer getChargingCurrentLimit() {
+		return getChargingCurrentLimitChannel().value().orElse(null);
 	}
 	
+
 	private IntegerReadChannel getChargingCurrentLimitModbusChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS);
 	}
 
-	private Value<Integer> getChargingCurrentLimitModbus() {
-		return getChargingCurrentLimitModbusChannel().value();
+	private Integer getChargingCurrentLimitModbus() {
+		return getChargingCurrentLimitModbusChannel().value().orElse(null);
 	}
+
 
 	private IntegerWriteChannel getSetChargingCurrentLimitChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT);
@@ -366,6 +378,11 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetChargingCurrentLimitChannel().setNextWriteValue(chargingCurrent);
 	}
 	
+	private Integer getSetChargingCurrentLimit() {
+		return getSetChargingCurrentLimitChannel().value().orElse(null);
+	}
+	
+	
 	private EnumWriteChannel getSetStartStopChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_START_STOP);
 	}
@@ -374,6 +391,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetStartStopChannel().setNextWriteValue(value != null ? value.getValue() : StartStop.STOP.getValue());
 	}
 
+	
 	private IntegerWriteChannel getSetCommunicationTimeoutChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT);
 	}
@@ -382,6 +400,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetCommunicationTimeoutChannel().setNextWriteValue(value);
 	}
 
+	
 	private IntegerWriteChannel getSetFallbackLimitChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT);
 	}
@@ -398,13 +417,46 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetLockUnlockSocketCableChannel().setNextWriteValue(value != null ? value.getValue() : LockUnlockSocketCable.UNLOCK.getValue());
 	}
 
+	private IntegerWriteChannel getProductionYearChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR);
+	}
+	
+	private void setProductionYear(int value) {
+		getProductionYearChannel().setNextValue(value);
+	}
+	
+	private IntegerWriteChannel getProductionWeekChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK);
+	}
+	
+	private void setProductionWeek(int value) {
+		getProductionWeekChannel().setNextValue(value);
+	}
+	
+	private EnumWriteChannel getRatedPowerChannel() {
+		return this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER);
+	}
+	
+	private RatedPower getRatedPower() {
+		return getRatedPowerChannel().value().asEnum();
+	}
+	
+	private void setRatedPower(RatedPower value) {
+		getRatedPowerChannel().setNextValue(value != null ? value.getValue() : RatedPower.UNDEFINED.getValue());
+	}
+	
+	
 	private EnumReadChannel getConnectorTypeChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.CONNECTOR_TYPE);
 	}
 	
+	private void setConnectorType(ConnectorType value) {
+		getConnectorTypeChannel().setNextValue(value != null ? value.getValue() : ConnectorType.UNDEFINED.getValue());
+	}
 	private ConnectorType getConnectorType() {
 		return getConnectorTypeChannel().value().asEnum();
 	}
+	
 	
 	private BooleanReadChannel getChargingStateIdleChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE);
@@ -446,21 +498,28 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return getChargingStateC2Channel().value().orElse(Boolean.FALSE);
 	}
 
+	
 	/*
 	 * === Logging ===========================================================
 	 */
 
 	@Override
 	public String debugLog() {
-		return this.config.readOnly() ? 
-				"Power: " + this.channel(ElectricityMeter.ChannelId.ACTIVE_POWER).getNextValue().orElse(null) :
-				"Power: " + this.channel(ElectricityMeter.ChannelId.ACTIVE_POWER).getNextValue().orElse(null)
-				+ "| Set Charging power:" + this.getSetChargePowerLimit().get() //
-				+ "| Set Charging current:" + getSetChargingCurrentLimitChannel().getNextWriteValue().orElse(Integer.MIN_VALUE) //
-				+ "| Charging current:" + this.getChargingCurrentLimit().get() //
-				+ "| Charging current (modbus):" + this.getChargingCurrentLimitModbus().get() //
-				+ "| Status:" + this.getStatus().getName() //
-				+ "| Error:" + this.getErrorChannel().value().asEnum();
+		final StringBuilder sb = new StringBuilder() //
+			.append("Power: ").append(this.getActivePower().orElse(null)) //
+			.append("| RatedPower: ").append(this.getRatedPower()) //
+			.append("| Connector type: ").append(this.getConnectorType()) //
+			.append("| Status:").append(this.getStatus()) //
+			.append("| Error:").append(this.getError()) //
+			;
+		if (!this.config.readOnly()) { 
+				sb.append("| Set Charging power: ").append(this.getSetChargePowerLimit().orElse(null)) //
+					.append("| Set Charging current: ").append(getSetChargingCurrentLimit()) //
+					.append("| Charging current: ").append(this.getChargingCurrentLimit()) //
+					.append("| Charging current (modbus): ").append(this.getChargingCurrentLimitModbus()) //
+					;
+		}
+		return sb.toString();
 	}
 
 	@Override
@@ -477,34 +536,40 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 	@Override
 	protected ModbusProtocol defineModbusProtocol() {
-		final ModbusProtocol modbusProtocol = this.config.readOnly() ? //
-				new ModbusProtocol(this, //
-						getDeviceInformationTask(), //
-						getDeviceMeasurementTask())
-				: //
-				new ModbusProtocol(this, //
-						getDeviceInformationTask(), //
-						getDeviceMeasurementTask(), //
-						getDeviceControlTask());
+		final ModbusProtocol modbusProtocol = new ModbusProtocol(this);
+		
+		modbusProtocol.addTask(deviceInformationTask);
+		modbusProtocol.addTask(deviceTypeTask);
+		modbusProtocol.addTask(deviceMeasurementTask);
+		if (!this.config.readOnly()) {
+			modbusProtocol.addTask(deviceControlTask);
+		}
 		return modbusProtocol;
 	}
 
-	private FC3ReadRegistersTask getDeviceInformationTask() {
-		return new FC3ReadRegistersTask(0x4000, Priority.LOW, //
-				getSerialNumberModbusRegsiterElement(), //
+	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4000, Priority.LOW, //
+				this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER),
+				this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK).onUpdateCallback(v -> {
+					if (v != null) {
+						final Long value = Long.class.cast(v);
+						setProductionYear(Long.valueOf(value & 0xFF).intValue());
+						setProductionWeek(Long.valueOf((value >> 16) & 0xFF).intValue());
+					}
+				}),
+				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0002));
+	
+	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4003, Priority.HIGH, //
+				this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK).onUpdateCallback(v -> {
+					if (v != null) {
+						final Long value = Long.class.cast(v);
+						setRatedPower(RatedPower.byValue(Long.valueOf(value & 0xFF).intValue()));
+						setConnectorType(ConnectorType.byValue(Long.valueOf((value >> 16) & 0xFF).intValue()));
+					}
+				}),
 				this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION) //
 		);
-	}
 
-	private String helper(Boolean[] bs) {
-		if (bs == null) {
-			return "<null>";
-		} else {
-			return Stream.of(bs).map(b -> b != null ? b.toString() : Boolean.FALSE.toString()).collect(Collectors.joining(","));
-		}
-	}
-	private FC3ReadRegistersTask getDeviceMeasurementTask() {
-		return new FC3ReadRegistersTask(0x4006, Priority.HIGH, //
+	private final FC3ReadRegistersTask deviceMeasurementTask = new FC3ReadRegistersTask(0x4006, Priority.HIGH, //
 				this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
 				this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
 				this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
@@ -515,8 +580,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 					.bit(10, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_B2) //
 					.bit(11, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1) //
 					.bit(12, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2) //
-					.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT) //
-					.onUpdateCallback(v -> logger.info("Next bit values of 0x000D: {}", helper(v)))), //
+					.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT)), //
 				this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT), //
 				this.m(ElectricityMeter.ChannelId.CURRENT_L1,
 						new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0010),
@@ -548,10 +612,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				this.m(EvcsAbbTerraAc.ChannelId.FALLBACK_LIMIT),
 				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0025) //
 				);
-	}
 
-	private FC16WriteRegistersTask getDeviceControlTask() {
-		return new FC16WriteRegistersTask(0x4100, //
+	private final FC16WriteRegistersTask deviceControlTask = new FC16WriteRegistersTask(0x4100, //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT), //
 				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0102), //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE), //
@@ -561,29 +623,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0107, DEVICE_START_ADDRESS | 0x0108), //
 				this.m(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT)
 		);
-	}
-
-	private AbstractModbusElement<?, ?, ?> getSerialNumberModbusRegsiterElement() {
-		return this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER_BLOCK).onUpdateCallback(value -> {
-			if (value == null) {
-				this.channel(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).setNextValue(null);
-				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR).setNextValue(null);
-				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK).setNextValue(null);
-				this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER).setNextValue(null);
-				getConnectorTypeChannel().setNextValue(null);
-			} else {
-				final Long serialNumber = Long.class.cast(value);
-//				logger.warn("SerialNumberBLock: 0x{}", HexFormat.of().formatHex(ByteBuffer.allocate(Long.BYTES).putLong(serialNumber).array()));
-				this.channel(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).setNextValue(Long.valueOf(serialNumber.longValue() & 0x000000000000FFFF).intValue());
-				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR)
-					.setNextValue((serialNumber.longValue() >> 16) & 0xFF);
-				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK)
-					.setNextValue((serialNumber.longValue() >> 24) & 0xFF);
-				this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER).setNextValue((serialNumber.longValue() >> 48) & 0xFF);
-				getConnectorTypeChannel().setNextValue((serialNumber.longValue() >> 56) & 0xFF);
-			}
-		});
-	}
 
 	/**
 	 * Helper method to create a modbus register by a

@@ -568,9 +568,9 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 					}
 				}),
 				this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION).onUpdateCallback(v -> {
-					if (v != null && v instanceof Integer) {
-						final Integer value = Integer.class.cast(v);
-						logger.info("Firmware version: 0x{}", Integer.toHexString(value));						
+					if (v != null && v instanceof Long) {
+						final Long value = Long.class.cast(v);
+						logger.info("Firmware version: 0x{}", Long.toHexString(value));						
 					}
 				}) //
 		);

@@ -71,7 +71,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 	@Override
 	public boolean debugMode() {
-		return false;
+		return true;
 	}
 
 	@Override
@@ -106,7 +106,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 	@Override
 	public boolean readOnly() {
-		return true;
+		return false;
 	}
 
 }

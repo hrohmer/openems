@@ -1,6 +1,7 @@
 package io.openems.edge.evcs.abb.terraac;
 
 import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE;
+import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_BEFORE_PROCESS_IMAGE;
 import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUTE_WRITE;
 import static io.openems.edge.evcs.api.EvcsUtils.milliampereToWatt;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
@@ -42,6 +43,7 @@ import io.openems.edge.common.channel.EnumReadChannel;
 import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
+import io.openems.edge.common.channel.ShortReadChannel;
 import io.openems.edge.common.channel.ShortWriteChannel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
@@ -65,6 +67,7 @@ import io.openems.edge.meter.api.ElectricityMeter;
 		configurationPolicy = REQUIRE)
 @EventTopics({ //
 		TOPIC_CYCLE_EXECUTE_WRITE, //
+		TOPIC_CYCLE_BEFORE_PROCESS_IMAGE,
 		TOPIC_CYCLE_AFTER_PROCESS_IMAGE
 })
 public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implements Evcs, ElectricityMeter, ManagedEvcs,
@@ -184,6 +187,26 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				if (!this.config.readOnly()) {
 					this.writeHandler.run();
 				}
+				break;
+				
+			case TOPIC_CYCLE_BEFORE_PROCESS_IMAGE:
+				this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK).getNextValue().ifPresent(v -> {
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						logger.info("Production block: 0x{}", Integer.toHexString(value));
+						setProductionYear(Integer.valueOf(value & 0xFF).shortValue());
+						setProductionWeek(Integer.valueOf((value >> 8) & 0xFF).shortValue());
+					}
+				});
+				this.channel(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK).getNextValue().ifPresent(v -> {
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						logger.info("Type block: 0x{}", Integer.toHexString(value));
+						setRatedPower(RatedPower.byValue(value & 0xFF));
+						setConnectorType(ConnectorType.byValue((value >> 8) & 0xFF));
+					}
+				});
+
 				break;
 				
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
@@ -426,7 +449,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getSetLockUnlockSocketCableChannel().setNextWriteValue(value != null ? value.getValue() : LockUnlockSocketCable.UNLOCK.getValue());
 	}
 
-	private ShortWriteChannel getProductionYearChannel() {
+	private ShortReadChannel getProductionYearChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_YEAR);
 	}
 	
@@ -434,7 +457,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getProductionYearChannel().setNextValue(value);
 	}
 	
-	private ShortWriteChannel getProductionWeekChannel() {
+	private ShortReadChannel getProductionWeekChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.PRODUCTION_DATE_WEEK);
 	}
 	
@@ -442,7 +465,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		getProductionWeekChannel().setNextValue(value);
 	}
 	
-	private EnumWriteChannel getRatedPowerChannel() {
+	private EnumReadChannel getRatedPowerChannel() {
 		return this.channel(EvcsAbbTerraAc.ChannelId.RATED_POWER);
 	}
 	
@@ -557,44 +580,15 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return modbusProtocol;
 	}
 
-	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4001, Priority.LOW, //
-			this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT).onUpdateCallback(v -> {
-				if (v != null && v instanceof Integer) {
-					final Integer value = Integer.class.cast(v);
-					logger.info("PlantID & Spare: 0x{}", Integer.toHexString(value));
-				}					
-			}), //
-			this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK).onUpdateCallback(v -> {
-				if (v != null && v instanceof Integer) {
-					final Integer value = Integer.class.cast(v);
-					logger.info("Production block: 0x{}", Integer.toHexString(value));
-					setProductionYear(Integer.valueOf(value & 0xFF).shortValue());
-					setProductionWeek(Integer.valueOf((value >> 16) & 0xFF).shortValue());
-				}
-			}),
-			this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER).onUpdateCallback(v -> {
-				if (v != null && v instanceof Integer) {
-					final Integer value = Integer.class.cast(v);
-					logger.info("Serial number: 0x{}", Integer.toHexString(value));
-				}					
-			}),
-			this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION).onUpdateCallback(v -> {
-				if (v != null && v instanceof Long) {
-					final Long value = Long.class.cast(v);
-					logger.info("Firmware version: 0x{}", Long.toHexString(value));						
-				}
-			}) //
+	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4000, Priority.LOW, //
+			this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER),
+			this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK),
+			this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT)
 		);
 	
-	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4000, Priority.HIGH, //
-			this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK).onUpdateCallback(v -> {
-				if (v != null && v instanceof Integer) {
-					final Integer value = Integer.class.cast(v);
-					logger.info("Type block: 0x{}", Integer.toHexString(value));
-					setRatedPower(RatedPower.byValue(value & 0xFF));
-					setConnectorType(ConnectorType.byValue((value >> 16) & 0xFF));
-				}
-			})
+	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4003, Priority.HIGH, //
+			this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK), //
+			this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION)
 		);
 
 	private final FC3ReadRegistersTask deviceMeasurementTask = new FC3ReadRegistersTask(0x4006, Priority.HIGH, //

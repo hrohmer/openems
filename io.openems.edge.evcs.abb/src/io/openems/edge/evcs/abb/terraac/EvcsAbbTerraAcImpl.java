@@ -411,7 +411,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	}
 	
 	private Integer getSetChargingCurrentLimit() {
-		return getSetChargingCurrentLimitChannel().value().orElse(null);
+		return getSetChargingCurrentLimitChannel().getNextWriteValue().orElse(null);
 	}
 	
 	
@@ -542,7 +542,13 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			.append("| Max current: ").append(this.getMaxCurrent()) //
 			.append("| RatedPower: ").append(this.getRatedPower()) //
 			.append("| Connector type: ").append(this.getConnectorType()) //
-			.append("| Status:").append(this.getStatus()) //
+			.append("| L1 current: ").append(getCurrentL1().orElse(null)) //
+			.append("| L2 current: ").append(getCurrentL2().orElse(null)) //
+			.append("| L3 current: ").append(getCurrentL3().orElse(null)) //
+			.append("| L1 voltage: ").append(getVoltageL1().orElse(null)) //
+			.append("| L2 voltage: ").append(getVoltageL2().orElse(null)) //
+			.append("| L3 voltage: ").append(getVoltageL3().orElse(null)) //
+ 			.append("| Status:").append(this.getStatus()) //
 			.append("| Error:").append(this.getError()) //
 			;
 		if (!this.config.readOnly()) { 

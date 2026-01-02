@@ -284,7 +284,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 //			applyDisplayText(getErrorChannel().value().asEnum().getName());
 //			
 //		} else {
-			final Double currentMilliampere = 1000.0D * (power / this.getPhasesAsInt() / Evcs.DEFAULT_VOLTAGE);
+			final Double currentAmpere = Integer.valueOf(power).doubleValue() / this.getPhasesAsInt() / Evcs.DEFAULT_VOLTAGE;
+			final Double currentMilliampere = 1000.0D * currentAmpere;
 			currentForLoad = Math.min(currentMilliampere.intValue(), this.config.maxHwCurrent());
 			this.logger.info("Set current charging limit to: {} mA", currentForLoad);
 //			applyDisplayText(MessageFormat.format("Loading with {0,number}mA", currentForLoad));

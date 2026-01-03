@@ -6,7 +6,6 @@ import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUT
 import static io.openems.edge.evcs.api.EvcsUtils.milliampereToWatt;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
 
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -44,6 +43,7 @@ import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.ShortReadChannel;
+import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.evcs.api.ChargeStateHandler;
@@ -55,6 +55,9 @@ import io.openems.edge.evcs.api.Phases;
 import io.openems.edge.evcs.api.Status;
 import io.openems.edge.evcs.api.WriteHandler;
 import io.openems.edge.meter.api.ElectricityMeter;
+import io.openems.edge.timedata.api.Timedata;
+import io.openems.edge.timedata.api.TimedataProvider;
+import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 
 /**
  * Implementation of the ABB Terra AC electrical car charging system.
@@ -70,7 +73,7 @@ import io.openems.edge.meter.api.ElectricityMeter;
 		TOPIC_CYCLE_AFTER_PROCESS_IMAGE
 })
 public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implements Evcs, ElectricityMeter, ManagedEvcs,
-		OpenemsComponent, ModbusComponent, EventHandler, EvcsAbbTerraAc {
+		OpenemsComponent, ModbusComponent, EventHandler, EvcsAbbTerraAc, TimedataProvider {
 
 	private final Logger logger = LoggerFactory.getLogger(EvcsAbbTerraAcImpl.class);
 
@@ -80,15 +83,28 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	@Reference
 	private EvcsPower evcsPower;
 
-	/**
+	@Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.OPTIONAL)
+	private volatile Timedata timedata = null;
+
+	/*
 	 * Handles charge states.
 	 */
 	private final ChargeStateHandler chargeStateHandler = new ChargeStateHandler(this);
 
-	/**
+	/*
 	 * Processes the controller's writes to this evcs component.
 	 */
 	private final WriteHandler writeHandler = new WriteHandler(this);
+
+	/*
+	 * Since ABB Terra AC does not provide Energy by phase, it needs to be accumulated
+	 */
+	private final CalculateEnergyFromPower phaseEnergyL1 = new CalculateEnergyFromPower(this,
+			ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L1);
+	private final CalculateEnergyFromPower phaseEnergyL2 = new CalculateEnergyFromPower(this,
+			ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L2);
+	private final CalculateEnergyFromPower phaseEnergyL3 = new CalculateEnergyFromPower(this,
+			ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L3);
 
 	private Config config;
 
@@ -118,7 +134,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 		/*
 		 * Calculates the maximum and minimum hardware power dynamically by listening on
-		 * the fixed hardware limit and the phases used for charging
+		 * the fixed hardware limit and the phases used for charging.
 		 */
 		Evcs.addCalculatePowerLimitListeners(this);
 		
@@ -130,7 +146,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			
 			// set the start/stop flag initially
 			setStartStop(StartStop.STOP);
-			isInPauseChargeProcess.set(getConfiguredDebugMode());
+			isInPauseChargeProcess.set(true);
 			// set ABB fallback values initially
 			setAbbTerraAcFallback();
 		}
@@ -205,7 +221,13 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 						setConnectorType(ConnectorType.byValue((value >> 8) & 0xFF));
 					}
 				});
-
+				
+				// Calculate the active power in before process image,
+				// since this value is used for energy calculations per phase
+				_setActivePowerL1(calculateAcPower(this.getCurrentL1(), this.getVoltageL1()));
+				_setActivePowerL2(calculateAcPower(this.getCurrentL2(), this.getVoltageL2()));
+				_setActivePowerL3(calculateAcPower(this.getCurrentL3(), this.getVoltageL3()));
+				
 				break;
 				
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
@@ -234,7 +256,12 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 				this._setChargingstationCommunicationFailed(this.getModbusCommunicationFailed());
 				// This register (401Eh = Active Consumption Energy) provides the transferred energy of the current charging session.
-				this._setEnergySession(Optional.ofNullable(getActiveConsumptionEnergy().get()).orElse(Long.valueOf(0)).intValue());
+				this._setEnergySession(getActiveConsumptionEnergy().orElse(Long.valueOf(0)).intValue());
+				
+				this.phaseEnergyL1.update(this.getActivePowerL1().orElse(0));
+				this.phaseEnergyL2.update(this.getActivePowerL2().orElse(0));
+				this.phaseEnergyL3.update(this.getActivePowerL3().orElse(0));
+
 				break;
 			}
 		}
@@ -287,7 +314,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			final Double currentMilliampere = 1000.0D * currentAmpere;
 			currentForLoad = Math.min(currentMilliampere.intValue(), this.config.maxHwCurrent());
 			this.logger.info("Set current charging limit to: {} mA", currentForLoad);
-//			applyDisplayText(MessageFormat.format("Loading with {0,number}mA", currentForLoad));
 //		}
 		
 		setSetChargingCurrentLimit(currentForLoad);
@@ -340,6 +366,12 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		return this.chargeStateHandler;
 	}
 
+	
+	@Override
+	public Timedata getTimedata() {
+		return this.timedata;
+	}
+
 	private void setAbbTerraAcFallback() throws OpenemsNamedException {
 		if (config.enabled() && !config.readOnly()) {
 
@@ -348,11 +380,24 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			
 			// set to 50% between min and max HW Current if less
 			setFallbackLimit(Double.valueOf((this.config.minHwCurrent() + this.config.maxHwCurrent()) / 2000.0d).intValue());
-			
-			
 		}
 	}
 	
+	/**
+	 * Calculates the power of one phase based on its current and voltage
+	 * 
+	 * @param current the current in Milliampere
+	 * @param voltage the voltage in Millivolt
+	 * @return the power in Watt or <code>null</code> if values are not defined
+	 */
+	private Integer calculateAcPower(Value<Integer> current, Value<Integer> voltage) {
+		if (current.isDefined() && voltage.isDefined()) {
+			final double currentInAmpere = current.get().doubleValue() / 1000.0D;
+			final double voltageInVolt = voltage.get().doubleValue() / 1000.0D;
+			return Double.valueOf(currentInAmpere * voltageInVolt).intValue();
+		}
+		return null;
+	}
 	/*
 	 * === Channels ===========================================================
 	 */
@@ -548,6 +593,14 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			.append("| L1 voltage: ").append(getVoltageL1().orElse(null)) //
 			.append("| L2 voltage: ").append(getVoltageL2().orElse(null)) //
 			.append("| L3 voltage: ").append(getVoltageL3().orElse(null)) //
+			.append("| L1 active power: ").append(getActivePowerL1().orElse(null)) //
+			.append("| L2 active power: ").append(getActivePowerL2().orElse(null)) //
+			.append("| L3 active power: ").append(getActivePowerL3().orElse(null)) //
+			.append("| L1 energy: ").append(getActiveConsumptionEnergyL1().orElse(null)) //
+			.append("| L2 energy: ").append(getActiveConsumptionEnergyL2().orElse(null)) //
+			.append("| L3 energy: ").append(getActiveConsumptionEnergyL1().orElse(null)) //
+			.append("| Power: ").append(getActiveConsumptionEnergy().orElse(null)) //
+			.append("| Energy: ").append(getActivePower().orElse(null)) //
  			.append("| Status:").append(this.getStatus()) //
 			.append("| Error:").append(this.getError()) //
 			;

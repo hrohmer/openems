@@ -1,5 +1,6 @@
 package io.openems.edge.evcs.abb.terraac;
 
+import io.openems.common.channel.AccessMode;
 import io.openems.common.channel.PersistencePriority;
 import io.openems.common.channel.Unit;
 import io.openems.common.types.OpenemsType;
@@ -89,19 +90,25 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 				.text("Fallback limit")),
 
 		SET_CHARGING_CURRENT_LIMIT(Doc.of(OpenemsType.INTEGER) //
+				.accessMode(AccessMode.WRITE_ONLY) //
 				.unit(Unit.MILLIAMPERE) //
 				.persistencePriority(PersistencePriority.HIGH) //
 				.text("Set Charging Current Limit")),
 		SET_LOCK_UNLOCK_SOCKET_CABLE(Doc.of(LockUnlockSocketCable.values()) //
+				.accessMode(AccessMode.WRITE_ONLY) //
 				.persistencePriority(PersistencePriority.HIGH) //
 				.text("This register (4103h) provides an option only for Socket cable to lock or unlock on Charger side")),
 		SET_START_STOP(Doc.of(StartStop.values()) //
+				.accessMode(AccessMode.WRITE_ONLY) //
 				.persistencePriority(PersistencePriority.HIGH) //
 				.text("This register (4105h) provides an option to start or stop a charge session")),
 		SET_COMMUNICATION_TIMEOUT(Doc.of(OpenemsType.INTEGER) //
+				.accessMode(AccessMode.WRITE_ONLY) //
+				.unit(Unit.SECONDS)
 				.persistencePriority(PersistencePriority.HIGH) //
 				.text("Communication timeout")),
 		SET_FALLBACK_LIMIT(Doc.of(OpenemsType.INTEGER) //
+				.accessMode(AccessMode.WRITE_ONLY) //
 				.unit(Unit.AMPERE) //
 				.persistencePriority(PersistencePriority.HIGH) //
 				.text("Set fallback limit")),

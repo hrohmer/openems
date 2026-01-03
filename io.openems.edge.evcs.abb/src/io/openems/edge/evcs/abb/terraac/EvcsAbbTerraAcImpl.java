@@ -222,12 +222,16 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 					}
 				});
 				
-				// Calculate the active power in before process image,
+				// Calculate the active power,
 				// since this value is used for energy calculations per phase
 				_setActivePowerL1(calculateAcPower(this.getCurrentL1(), this.getVoltageL1()));
 				_setActivePowerL2(calculateAcPower(this.getCurrentL2(), this.getVoltageL2()));
 				_setActivePowerL3(calculateAcPower(this.getCurrentL3(), this.getVoltageL3()));
 				
+				this.phaseEnergyL1.update(this.getActivePowerL1Channel().getNextValue().orElse(0));
+				this.phaseEnergyL2.update(this.getActivePowerL2Channel().getNextValue().orElse(0));
+				this.phaseEnergyL3.update(this.getActivePowerL3Channel().getNextValue().orElse(0));
+
 				break;
 				
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
@@ -258,10 +262,6 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				// This register (401Eh = Active Consumption Energy) provides the transferred energy of the current charging session.
 				this._setEnergySession(getActiveConsumptionEnergy().orElse(Long.valueOf(0)).intValue());
 				
-				this.phaseEnergyL1.update(this.getActivePowerL1().orElse(0));
-				this.phaseEnergyL2.update(this.getActivePowerL2().orElse(0));
-				this.phaseEnergyL3.update(this.getActivePowerL3().orElse(0));
-
 				break;
 			}
 		}
@@ -599,8 +599,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			.append("| L1 energy: ").append(getActiveConsumptionEnergyL1().orElse(null)) //
 			.append("| L2 energy: ").append(getActiveConsumptionEnergyL2().orElse(null)) //
 			.append("| L3 energy: ").append(getActiveConsumptionEnergyL1().orElse(null)) //
-			.append("| Power: ").append(getActiveConsumptionEnergy().orElse(null)) //
-			.append("| Energy: ").append(getActivePower().orElse(null)) //
+			.append("| Power: ").append(getActivePower().orElse(null)) //
+			.append("| Energy: ").append(getActiveConsumptionEnergy().orElse(null)) //
  			.append("| Status:").append(this.getStatus()) //
 			.append("| Error:").append(this.getError()) //
 			;

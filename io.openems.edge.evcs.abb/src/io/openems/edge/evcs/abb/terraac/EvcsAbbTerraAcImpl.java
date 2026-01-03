@@ -34,8 +34,8 @@ import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.BitsWordElement;
 import io.openems.edge.bridge.modbus.api.element.DummyRegisterElement;
-import io.openems.edge.bridge.modbus.api.element.ModbusRegisterElement;
 import io.openems.edge.bridge.modbus.api.element.UnsignedDoublewordElement;
+import io.openems.edge.bridge.modbus.api.element.UnsignedWordElement;
 import io.openems.edge.bridge.modbus.api.task.FC16WriteRegistersTask;
 import io.openems.edge.bridge.modbus.api.task.FC3ReadRegistersTask;
 import io.openems.edge.common.channel.BooleanReadChannel;
@@ -44,7 +44,6 @@ import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.ShortReadChannel;
-import io.openems.edge.common.channel.ShortWriteChannel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
 import io.openems.edge.evcs.api.ChargeStateHandler;
@@ -588,20 +587,32 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	}
 
 	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4000, Priority.LOW, //
-			this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER),
-			this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK),
-			this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT)
+			this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0000), ElementToChannelConverter.DIRECT_1_TO_1) //
+				.onUpdateCallback(v -> {
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						logger.info("Serial number: 0x{}", Integer.toHexString(value));
+					}
+				}),
+			this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), ElementToChannelConverter.DIRECT_1_TO_1),
+			this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0002), ElementToChannelConverter.DIRECT_1_TO_1) //
+				.onUpdateCallback(v -> {
+					if (v != null && v instanceof Integer) {
+						final Integer value = Integer.class.cast(v);
+						logger.info("Spare plant: 0x{}", Integer.toHexString(value));
+					}
+				})
 		);
 	
 	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4003, Priority.HIGH, //
-			this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK), //
-			this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION)
+			this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0004), ElementToChannelConverter.DIRECT_1_TO_1)
 		);
 
 	private final FC3ReadRegistersTask deviceMeasurementTask = new FC3ReadRegistersTask(0x4006, Priority.HIGH, //
-			this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT), //
-			this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE), //
-			this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE), //
+			this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0006), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0008), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x000A), ElementToChannelConverter.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
 			this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this) //
 				.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
@@ -610,7 +621,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				.bit(11, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1) //
 				.bit(12, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2) //
 				.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT)), //
-			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT), //
+			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x000E), ElementToChannelConverter.DIRECT_1_TO_1), //
 			this.m(ElectricityMeter.ChannelId.CURRENT_L1,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0010),
 					ElementToChannelConverter.DIRECT_1_TO_1), //
@@ -635,34 +646,22 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			this.m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001E),
 					ElementToChannelConverter.DIRECT_1_TO_1), //
-			this.m(EvcsAbbTerraAc.ChannelId.COMMUNICATION_TIMEOUT), //
+			this.m(EvcsAbbTerraAc.ChannelId.COMMUNICATION_TIMEOUT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0020), ElementToChannelConverter.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0021), //
-			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS), //
-			this.m(EvcsAbbTerraAc.ChannelId.FALLBACK_LIMIT),
+			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0022), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.FALLBACK_LIMIT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0024), ElementToChannelConverter.DIRECT_1_TO_1),
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0025) //
 		);
 
 	private final FC16WriteRegistersTask deviceControlTask = new FC16WriteRegistersTask(0x4100, //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0100), ElementToChannelConverter.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0102), //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0103), ElementToChannelConverter.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0104), //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_START_STOP), //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_START_STOP, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0105), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0106), ElementToChannelConverter.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0107, DEVICE_START_ADDRESS | 0x0108), //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT)
+			this.m(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0109), ElementToChannelConverter.DIRECT_1_TO_1)
 		);
 
-	/**
-	 * Helper method to create a modbus register by a
-	 * {@link EvcsAbbTerraAc.ChannelId}.
-	 * 
-	 * @param channelId The channel description
-	 * @return the element parameter
-	 */
-	private ModbusRegisterElement<?, ?> m(EvcsAbbTerraAc.ChannelId channelId) {
-		return channelId.converter() != null //
-				? this.m(channelId, channelId.address(), channelId.converter()) //
-				: this.m(channelId, channelId.address());
-	}
 }

@@ -244,12 +244,13 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 					this._setStatus(Status.CHARGING_REJECTED);
 				} else if (isChargingStateB2()) {
 					// if in state B2 and connector is cable the state is 'charging' most likely
-					if (getConnectorType().compareTo(ConnectorType.TYPE_1_P) == 0 || 
-							getConnectorType().compareTo(ConnectorType.TYPE_2_G) == 0) {
+					// TODO add check for type if available
+//					if (getConnectorType().compareTo(ConnectorType.TYPE_1_P) == 0 || 
+//							getConnectorType().compareTo(ConnectorType.TYPE_2_G) == 0) {
 						this._setStatus(Status.CHARGING);
-					} else {
-						this._setStatus(Status.READY_FOR_CHARGING);						
-					}
+//					} else {
+//						this._setStatus(Status.READY_FOR_CHARGING);						
+//					}
 				} else if (isChargingStateC1()) {					
 					this._setStatus(Status.READY_FOR_CHARGING);
 				} else if (isChargingStateC2()) {					

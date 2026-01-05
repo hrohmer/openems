@@ -224,14 +224,19 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				
 				// Calculate the active power,
 				// since this value is used for energy calculations per phase
-				_setActivePowerL1(calculateAcPower(this.getCurrentL1(), this.getVoltageL1()));
-				_setActivePowerL2(calculateAcPower(this.getCurrentL2(), this.getVoltageL2()));
-				_setActivePowerL3(calculateAcPower(this.getCurrentL3(), this.getVoltageL3()));
+				final Integer powerL1 = calculateAcPower(this.getCurrentL1(), this.getVoltageL1());
+				final Integer powerL2 = calculateAcPower(this.getCurrentL2(), this.getVoltageL2());
+				final Integer powerL3 = calculateAcPower(this.getCurrentL3(), this.getVoltageL3());
+				_setActivePowerL1(powerL1);
+				_setActivePowerL2(powerL2);
+				_setActivePowerL3(powerL3);
 				
-				this.phaseEnergyL1.update(this.getActivePowerL1Channel().getNextValue().orElse(0));
-				this.phaseEnergyL2.update(this.getActivePowerL2Channel().getNextValue().orElse(0));
-				this.phaseEnergyL3.update(this.getActivePowerL3Channel().getNextValue().orElse(0));
-
+				if (this.timedata != null) {
+					this.phaseEnergyL1.update(powerL1);
+					this.phaseEnergyL2.update(powerL2);
+					this.phaseEnergyL3.update(powerL3);
+				}
+				
 				break;
 				
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:

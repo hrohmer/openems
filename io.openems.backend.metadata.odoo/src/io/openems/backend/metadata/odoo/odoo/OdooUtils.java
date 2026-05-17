@@ -199,7 +199,7 @@ public class OdooUtils {
 
 	protected static SuccessResponseAndHeaders sendAdminJsonrpcRequest(Credentials credentials, String url,
 			JsonObject request, int timeout) throws OpenemsNamedException {
-		var session = OdooUtils.login(credentials, "admin", credentials.password());
+		var session = OdooUtils.loginAdmin(credentials);
 		return OdooUtils.sendJsonrpcRequest(credentials.url() + url, "session_id=" + session, request, timeout);
 	}
 
@@ -214,7 +214,7 @@ public class OdooUtils {
 	 */
 	protected static SuccessResponseAndHeaders sendAdminJsonrpcRequest(Credentials credentials, String url,
 			JsonObject request) throws OpenemsNamedException {
-		var session = OdooUtils.login(credentials, "admin", credentials.password());
+		var session = OdooUtils.loginAdmin(credentials);
 		return OdooUtils.sendJsonrpcRequest(credentials.url() + url, "session_id=" + session, request);
 	}
 
@@ -238,20 +238,20 @@ public class OdooUtils {
 	}
 
 	protected static String loginAdmin(Credentials credentials) throws OpenemsNamedException {
-		return OdooUtils.login(credentials, "admin", credentials.password());
+		return OdooUtils.login(credentials, credentials.login(), credentials.password());
 	}
 
 	/**
-	 * Authenticates a user using Username and Password.
+	 * Authenticates a user using Login and Password.
 	 *
 	 * @param credentials used to get Odoo url
-	 * @param username    the Username
+	 * @param login       the login (normally username)
 	 * @param password    the Password
 	 * @return the session_id
 	 * @throws OpenemsNamedException on login error
 	 */
-	public static String login(Credentials credentials, String username, String password) throws OpenemsNamedException {
-		if (username.isBlank() || password.isBlank()) {
+	public static String login(Credentials credentials, String login, String password) throws OpenemsNamedException {
+		if (login.isBlank() || password.isBlank()) {
 			// Do not even send request if username or password are blank
 			throw OpenemsError.COMMON_AUTHENTICATION_FAILED.exception();
 		}
@@ -260,7 +260,7 @@ public class OdooUtils {
 				.addProperty("method", "call") //
 				.add("params", JsonUtils.buildJsonObject() //
 						.addProperty("db", credentials.database()) //
-						.addProperty("login", username.toLowerCase()) //
+						.addProperty("login", login.toLowerCase()) //
 						.addProperty("password", password) //
 						.build()) //
 				.build();
@@ -599,7 +599,7 @@ public class OdooUtils {
 	 * @throws OpenemsNamedException on error
 	 */
 	protected static byte[] getOdooReport(Credentials credentials, String report, int id) throws OpenemsNamedException {
-		var session = OdooUtils.login(credentials, "admin", credentials.password());
+		var session = OdooUtils.loginAdmin(credentials);
 
 		HttpURLConnection connection = null;
 		try {
@@ -736,7 +736,7 @@ public class OdooUtils {
 	 * @param fieldname the field name
 	 * @return value as optional
 	 */
-	private static Optional<String> getFieldFromSetCookieHeader(Map<String, List<String>> headers, String fieldname) {
+	public static Optional<String> getFieldFromSetCookieHeader(Map<String, List<String>> headers, String fieldname) {
 		for (Entry<String, List<String>> header : headers.entrySet()) {
 			var key = header.getKey();
 			if (key != null && key.equalsIgnoreCase("Set-Cookie")) {

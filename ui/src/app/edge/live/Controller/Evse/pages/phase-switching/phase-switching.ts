@@ -1,16 +1,13 @@
 import { Component, inject } from "@angular/core";
 import { FormControl, FormGroup } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
-import { ViewWillEnter } from "@ionic/angular";
 import { TranslateService } from "@ngx-translate/core";
 import { LiveDataService } from "src/app/edge/live/livedataservice";
-import { NavigationTree } from "src/app/shared/components/navigation/shared";
 import { DataService } from "src/app/shared/components/shared/dataservice";
 import { Name } from "src/app/shared/components/shared/name";
-import { AbstractFormlyComponent, OeFormlyField, OeFormlyView } from "src/app/shared/components/shared/oe-formly-component";
+import { AbstractFormlyComponent, OeFormlyField, OeFormlyView, ViewContext } from "src/app/shared/components/shared/oe-formly-component";
 import { RouteService } from "src/app/shared/service/route.service";
 import { ChannelAddress, CurrentData, Edge, EdgeConfig, Service } from "src/app/shared/shared";
-import { Role } from "src/app/shared/type/role";
 import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
 
 @Component({
@@ -27,7 +24,7 @@ import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils
     ],
 })
 
-export class EvsePhaseSwitchingComponent extends AbstractFormlyComponent implements ViewWillEnter {
+export class EvsePhaseSwitchingComponent extends AbstractFormlyComponent {
     public static formControlName: string = "phaseSwitching";
     protected override formlyWrapper: "formly-field-modal" | "formly-field-navigation" = "formly-field-navigation";
 
@@ -61,7 +58,7 @@ export class EvsePhaseSwitchingComponent extends AbstractFormlyComponent impleme
             {
                 type: "info-line",
                 name: translate.instant("EDGE.INDEX.WIDGETS.EVCS.PHASE_SWITCHING_INFO"),
-                style: "font-weight: bold; text-align: center; font-size: 1rem; padding-bottom: calc(var(--ion-padding) * 4)",
+                style: { name: { fontWeight: "bold", textAlign: "center", fontSize: "1rem", paddingBottom: "calc(var(--ion-padding) * 4)" } },
             },
             {
                 type: "radio-buttons-from-form-control-line",
@@ -97,49 +94,13 @@ export class EvsePhaseSwitchingComponent extends AbstractFormlyComponent impleme
         };
     }
 
-
-    public ionViewWillEnter(): void {
-        const url = this.routeService.currentUrl();
-        if (url === null) {
-            return;
-        }
-
-        const componentId = this.routeService.getRouteParam("componentId");
-        // Create a new navigation tree node for the task
-        const newNavigationTree = new NavigationTree("phase-switching", { baseString: "phase-switching" }, { name: "menu-outline", color: "warning" }, this.translate.instant("EDGE.INDEX.WIDGETS.EVCS.PHASE_SWITCHING"), "label", [], null);
-
-        // Retrieve the existing navigation tree
-        const oldNavigationTree = this.navigationService.navigationTree();
-        if (oldNavigationTree == null) {
-            return;
-        }
-
-        // Find the parent node by its ID
-        const parentNode = oldNavigationTree.getChildren()?.find(child => child.id === componentId) ?? null;
-        if (parentNode == null) {
-            console.warn("Parent node not found for componentId:", componentId);
-            return;
-        }
-
-        // Set relationships between the nodes
-        newNavigationTree.parent = parentNode;
-        parentNode.setChild("phase-switching", newNavigationTree);
-        parentNode.parent = oldNavigationTree;
-
-        // Update the navigation system with the modified tree
-        this.navigationService.navigationTree.set(oldNavigationTree);
-        this.navigationService.currentNode.set(newNavigationTree);
-    }
-
-
     protected override onCurrentData(currentData: CurrentData): void {
         this.setFormControlSafelyWithChannel<number>(this.form, EvsePhaseSwitchingComponent.formControlName, currentData, this.phaseSwitchingChannel);
     }
 
-    protected override generateView(config: EdgeConfig, role: Role): OeFormlyView {
-        this.controller = config.getComponent(this.route.snapshot.params.componentId);
-        const edge = this.service.currentEdge();
-        return EvsePhaseSwitchingComponent.generateView(this.translate, this.controller, edge);
+    protected override generateView(viewContext: ViewContext): OeFormlyView {
+        this.controller = viewContext.config.getComponent(this.route.snapshot.params.componentId);
+        return EvsePhaseSwitchingComponent.generateView(this.translate, this.controller, viewContext.edge);
     }
 
     protected override getFormGroup(): FormGroup {
@@ -158,6 +119,7 @@ export class EvsePhaseSwitchingComponent extends AbstractFormlyComponent impleme
         return [this.phaseSwitchingChannel];
     }
 }
+
 export enum PhaseSwitching {
     /**
      * Phase-Switching is disabled.

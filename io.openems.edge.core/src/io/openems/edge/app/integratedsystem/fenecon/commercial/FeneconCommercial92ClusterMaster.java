@@ -8,8 +8,10 @@ import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.feedInL
 import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.hasEssLimiter14a;
 import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.maxFeedInPower;
 import static io.openems.edge.app.integratedsystem.IntegratedSystemProps.safetyCountry;
+import static io.openems.edge.app.integratedsystem.fenecon.commercial.FeneconCommercialUtils.isOldGridMeterAppUsedByCommercialApp;
 import static io.openems.edge.core.appmanager.TranslationUtil.translate;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.IntStream;
@@ -26,7 +28,6 @@ import com.google.gson.JsonPrimitive;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.function.ThrowingTriFunction;
-import io.openems.common.oem.OpenemsEdgeOem;
 import io.openems.common.session.Language;
 import io.openems.common.session.Role;
 import io.openems.common.types.EdgeConfig;
@@ -39,7 +40,6 @@ import io.openems.edge.core.appmanager.AbstractOpenemsApp;
 import io.openems.edge.core.appmanager.AbstractOpenemsAppWithProps;
 import io.openems.edge.core.appmanager.AppConfiguration;
 import io.openems.edge.core.appmanager.AppDef;
-import io.openems.edge.core.appmanager.AppDescriptor;
 import io.openems.edge.core.appmanager.AppManagerUtil;
 import io.openems.edge.core.appmanager.AppManagerUtilSupplier;
 import io.openems.edge.core.appmanager.ComponentUtil;
@@ -53,6 +53,8 @@ import io.openems.edge.core.appmanager.Type;
 import io.openems.edge.core.appmanager.Type.Parameter;
 import io.openems.edge.core.appmanager.Type.Parameter.BundleParameter;
 import io.openems.edge.core.appmanager.dependency.Tasks;
+import io.openems.edge.core.appmanager.dependency.aggregatetask.ComponentDef;
+import io.openems.edge.core.appmanager.dependency.aggregatetask.ComponentProperties;
 import io.openems.edge.core.appmanager.formly.JsonFormlyUtil;
 import io.openems.edge.core.appmanager.formly.enums.InputType;
 import io.openems.edge.core.host.NetworkInterface.IpMasqueradeSetting;
@@ -126,13 +128,6 @@ public class FeneconCommercial92ClusterMaster
 	}
 
 	@Override
-	public AppDescriptor getAppDescriptor(OpenemsEdgeOem oem) {
-		return AppDescriptor.create() //
-				.setWebsiteUrl(oem.getAppWebsiteUrl(this.getAppId())) //
-				.build();
-	}
-
-	@Override
 	public OpenemsAppCategory[] getCategories() {
 		return new OpenemsAppCategory[] { OpenemsAppCategory.INTEGRATED_SYSTEM };
 	}
@@ -163,67 +158,85 @@ public class FeneconCommercial92ClusterMaster
 			final var deviceHardware = this.appManagerUtil
 					.getFirstInstantiatedAppByCategories(OpenemsAppCategory.OPENEMS_DEVICE_HARDWARE);
 
-			final var components = Lists.<EdgeConfig.Component>newArrayList(//
-					new EdgeConfig.Component(essId, translate(bundle, "App.IntegratedSystem.ess0.alias"), "Ess.Cluster",
-							JsonUtils.buildJsonObject() //
-									.addProperty("enabled", true) //
-									.add("ess.ids", IntStream.range(0, numberOfSlaves) //
-											.mapToObj(i -> new JsonPrimitive("ess" + (i + 1))) //
-											.collect(JsonUtils.toJsonArray())) //
-									.addProperty("startStop", "START") //
-									.build()), //
-					FeneconHomeComponents.modbusInternal(bundle, t, "modbus0"), //
-					FeneconCommercialComponents.modbusToGridMeterAndExternal(bundle, t, modbusToGridMeterAndExternalId) //
+			final var components = Lists.newArrayList(//
+					ComponentDef.from(new EdgeConfig.Component("_power", "", "Ess.Power", JsonUtils.buildJsonObject() //
+							.addProperty("strategy", "OPTIMIZE_BY_KEEPING_ALL_NEAR_EQUAL") //
+							.build())), //
+					ComponentDef
+							.from(new EdgeConfig.Component(essId, translate(bundle, "App.IntegratedSystem.ess0.alias"),
+									"Ess.Cluster", JsonUtils.buildJsonObject() //
+											.addProperty("enabled", true) //
+											.add("ess.ids", IntStream.range(0, numberOfSlaves) //
+													.mapToObj(i -> new JsonPrimitive("ess" + (i + 1))) //
+													.collect(JsonUtils.toJsonArray())) //
+											.addProperty("startStop", "START") //
+											.build())), //
+					ComponentDef.from(FeneconHomeComponents.modbusInternal(bundle, t, "modbus0")), //
+					ComponentDef.from(FeneconCommercialComponents.modbusToGridMeterAndExternal(bundle, t,
+							modbusToGridMeterAndExternalId)), //
+					new ComponentDef("_power", "", "Ess.Power",
+							new ComponentProperties(List.of(ComponentProperties.Property.of("strategy")
+									.withValue("OPTIMIZE_BY_KEEPING_ALL_NEAR_EQUAL") //
+									.withForceUpdate(true))),
+							ComponentDef.Configuration.defaultConfig()) //
 			);
 
 			for (int i = 1; i <= numberOfSlaves; i++) {
 				final var bridgeId = "bridge" + i;
-				components.add(new EdgeConfig.Component(bridgeId,
+				components.add(ComponentDef.from(new EdgeConfig.Component(bridgeId,
 						translate(bundle, "App.IntegratedSystem.bridgeToSlaveN.alias", i), "Bridge.Edge2Edge.Websocket",
 						JsonUtils.buildJsonObject() //
 								.addProperty("enabled", true) //
 								.addProperty("ip", "10.5.0." + (10 + i)) //
 								.addProperty("port", 8085) //
-								.build()));
-				components.add(
+								.build())));
+				components.add(ComponentDef.from(
 						new EdgeConfig.Component("ess" + i, translate(bundle, "App.IntegratedSystem.essN.alias", i),
 								"Edge2Edge.Websocket.Ess", JsonUtils.buildJsonObject() //
 										.addProperty("enabled", true) //
 										.addProperty("remoteAccessMode", "READ_WRITE") //
 										.addProperty("remoteComponentId", "ess0") //
 										.addProperty("bridge.id", bridgeId) //
-										.build()));
-				components.add(new EdgeConfig.Component("battery" + i,
+										.build())));
+				components.add(ComponentDef.from(new EdgeConfig.Component("battery" + i,
 						translate(bundle, "App.IntegratedSystem.batteryN.alias", i),
 						"Edge2Edge.Websocket.GenericReadComponent", JsonUtils.buildJsonObject() //
 								.addProperty("enabled", true) //
 								.addProperty("remoteComponentId", "battery0") //
 								.addProperty("bridge.id", bridgeId) //
-								.build()));
-				components.add(new EdgeConfig.Component("batteryInverter" + i,
+								.build())));
+				components.add(ComponentDef.from(new EdgeConfig.Component("batteryInverter" + i,
 						translate(bundle, "App.IntegratedSystem.batteryInverterN.alias", i),
 						"Edge2Edge.Websocket.GenericReadComponent", JsonUtils.buildJsonObject() //
 								.addProperty("enabled", true) //
 								.addProperty("remoteComponentId", "batteryInverter0") //
 								.addProperty("bridge.id", bridgeId) //
-								.build()));
+								.build())));
 			}
 
 			final var dependencies = Lists.newArrayList(//
 					FeneconHomeComponents.selfConsumptionOptimization(t, essId, gridMeterId), //
 					FeneconHomeComponents.gridOptimizedCharge(t), //
 					FeneconHomeComponents.prepareBatteryExtension(), //
-					FeneconCommercialComponents.gridMeter(bundle, gridMeterId, modbusToGridMeterAndExternalId), //
 					FeneconHomeComponents.predictionDefault(), //
-					FeneconHomeComponents.predictionUnmanagedConsumption()//
+					FeneconHomeComponents.predictionUnmanagedConsumption() //
 			);
+
+			if (isOldGridMeterAppUsedByCommercialApp(this.appManagerUtil, this.getAppId())) {
+				dependencies.add(//
+						FeneconCommercialComponents.gridMeterWithOldDependency(bundle, gridMeterId,
+								modbusToGridMeterAndExternalId));
+			} else {
+				dependencies.add(//
+						FeneconCommercialComponents.gridMeter(bundle));
+			}
 
 			if (hasEssLimiter14a) {
 				dependencies.add(essLimiter14aToHardware(this.appManagerUtil, deviceHardware));
 			}
 
 			return AppConfiguration.create() //
-					.addTask(Tasks.component(components)) //
+					.addTask(Tasks.componentFromComponentConfig(components)) //
 					.addTask(Tasks.staticIp(//
 							new InterfaceConfiguration("eth0") //
 									.setIpv4Forwarding(true),

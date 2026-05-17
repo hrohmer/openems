@@ -13,6 +13,7 @@ import { NgxSpinnerModule } from "ngx-spinner";
 import { FormlyCurrentUserAlertingComponent } from "../edge/settings/alerting/formly/formly-current-user-alerting";
 import { FormlyOtherUsersAlertingComponent } from "../edge/settings/alerting/formly/formly-other-users-alerting";
 import { ComponentsModule } from "./components/components.module";
+import { DateTimeLineComponent } from "./components/datetime-picker/datetime-picker";
 import { MeterModule } from "./components/edge/meter/meter.module";
 import { FlatWidgetButtonComponent } from "./components/flat/flat-widget-button/flat-widget-button";
 import { FormlyCheckBoxHyperlinkWrapperComponent } from "./components/formly/form-field-checkbox-hyperlink/form-field-checkbox-hyperlink.wrapper";
@@ -39,17 +40,20 @@ import { RepeatTypeComponent } from "./components/formly/repeat";
 import { AppHeaderComponent } from "./components/header/app-header";
 import { HeaderComponent } from "./components/header/header.component";
 import { HistoryDataErrorModule } from "./components/history-data-error/history-data-error.module";
+import { HelpButtonComponent } from "./components/modal/help-button/help-button";
+import { ModalToggleLineComponent as ModalToggleWithValueLineComponent } from "./components/modal/modal-toggle-line/modal-toggle-line";
 import { ModalComponentsModule } from "./components/modal/modal.module";
 import { PercentageBarComponent } from "./components/percentagebar/percentagebar.component";
 import { PickDateTimeRangeComponent } from "./components/pick-date-time-range/pick-date-time-range";
 import { PickdateComponentModule } from "./components/pickdate/pickdate.module";
+import { TimeLineComponent } from "./components/picktime/picktime.component";
 import { HelpPopoverButtonComponent } from "./components/shared/view-component/help-popover/help-popover";
 import { SystemStatusComponent } from "./components/status/system/system-status.component";
 import { DirectiveModule } from "./directive/directive";
 import de from "./i18n/de.json";
 import en from "./i18n/en.json";
 import { ChartOptionsComponent } from "./legacy/chartoptions/chartoptions.component";
-import { AppStateTracker } from "./ngrx-store/states";
+import { AppStateTracker } from "./ngrx-store/app-state-tracker";
 import { PipeModule } from "./pipe/pipe.module";
 import { Logger } from "./service/logger";
 import { RouteService } from "./service/route.service";
@@ -169,6 +173,10 @@ export function PersonNameProhibitedCharactersValidator(control: FormControl): V
         TranslateModule,
         HelpPopoverButtonComponent,
         FlatWidgetButtonComponent,
+        HelpButtonComponent,
+        TimeLineComponent,
+        ModalToggleWithValueLineComponent,
+        DateTimeLineComponent,
     ],
     declarations: [
         AppHeaderComponent,
@@ -223,6 +231,7 @@ export function PersonNameProhibitedCharactersValidator(control: FormControl): V
         RouterModule,
         TranslateModule,
         PickDateTimeRangeComponent,
+        TimeLineComponent,
     ],
     providers: [
         AppStateTracker,

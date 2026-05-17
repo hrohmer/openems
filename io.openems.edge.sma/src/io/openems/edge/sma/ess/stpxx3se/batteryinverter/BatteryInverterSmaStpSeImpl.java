@@ -1,9 +1,13 @@
 package io.openems.edge.sma.ess.stpxx3se.batteryinverter;
 
+import static io.openems.common.utils.IntUtils.sumInteger;
+import static org.osgi.service.component.annotations.ReferenceCardinality.MANDATORY;
+import static org.osgi.service.component.annotations.ReferencePolicy.STATIC;
+import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
+
 import java.util.Map;
 import java.util.function.Consumer;
 
-import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -21,6 +25,7 @@ import com.google.common.collect.ImmutableMap;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.referencetarget.GenerateTargetsFromReferences;
 import io.openems.edge.battery.api.Battery;
 import io.openems.edge.batteryinverter.api.HybridManagedSymmetricBatteryInverter;
 import io.openems.edge.batteryinverter.api.ManagedSymmetricBatteryInverter;
@@ -48,9 +53,11 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
-		name = "Ess.SMA.StpSe.Inverter", immediate = true, //
+		name = "Ess.SMA.StpSe.Inverter", //
+		immediate = true, //
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
+@GenerateTargetsFromReferences("Modbus")
 public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 		implements BatteryInverterSmaStpSe, HybridManagedSymmetricBatteryInverter, ManagedSymmetricBatteryInverter,
 		SymmetricBatteryInverter, StartStoppable, ModbusComponent, TimedataProvider, OpenemsComponent {
@@ -68,9 +75,6 @@ public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 			// .put(DefaultSunSpecModel.S_64870, Priority.HIGH) // Vendor specific
 			.put(S160SunSpecModel.S_160, Priority.HIGH) // Multiple MPPT Inverter Extension Model
 			.build();
-
-	@Reference
-	private ConfigurationAdmin cm;
 
 	@Reference
 	private Sum sum;
@@ -93,7 +97,6 @@ public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 	private final ApplyPowerHandler applyPowerHandler = new ApplyPowerHandler(this);
 
 	private Config config;
-
 	private boolean firstRun = true;
 
 	public BatteryInverterSmaStpSeImpl() throws OpenemsException {
@@ -110,7 +113,10 @@ public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 
 	}
 
-	@Reference(policy = ReferencePolicy.STATIC, policyOption = ReferencePolicyOption.GREEDY, cardinality = ReferenceCardinality.MANDATORY)
+	@Override
+	@Reference(//
+			policy = STATIC, policyOption = GREEDY, cardinality = MANDATORY, //
+			target = "(&(id=${config.modbus_id})(enabled=true))")
 	protected void setModbus(BridgeModbus modbus) {
 		super.setModbus(modbus);
 	}
@@ -118,10 +124,8 @@ public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 	@Activate
 	private void activate(ComponentContext context, Config config) throws OpenemsException {
 		this.config = config;
-		if (super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(), this.cm,
-				"Modbus", config.modbus_id(), READ_FROM_MODBUS_BLOCK)) {
-			return;
-		}
+		super.activate(context, config.id(), config.alias(), config.enabled(), config.modbusUnitId(),
+				READ_FROM_MODBUS_BLOCK);
 		this._setGridMode(GridMode.ON_GRID);
 		this._setConfiguredControlMode(config.controlMode());
 		this._setInitializing(true);
@@ -174,7 +178,7 @@ public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 	private void installListeners() {
 		// NOTE: Twice the same callback needed, as we have to install it on Integer-
 		// and Float-Channels
-		final Consumer<Value<Integer>> calculate = ignore -> {
+		final Consumer<Value<Integer>> calculateInteger = ignore -> {
 			Integer p1;
 			Integer p2;
 			try {
@@ -185,10 +189,10 @@ public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 			} catch (OpenemsException e) {
 				return;
 			}
-			this._setActivePower(TypeUtils.sum(//
+			this._setActivePower(sumInteger(//
 					p1, p2, this.getDcDischargePowerChannel().getNextValue().get())); //
 		};
-		final Consumer<Value<Float>> calculateF = ignore -> {
+		final Consumer<Value<Float>> calculateFloat = ignore -> {
 			Integer p1;
 			Integer p2;
 			try {
@@ -199,16 +203,15 @@ public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 			} catch (OpenemsException e) {
 				return;
 			}
-			this._setActivePower(TypeUtils.sum(//
+			this._setActivePower(sumInteger(//
 					p1, p2, this.getDcDischargePowerChannel().getNextValue().get())); //
 		};
-		this.getDcDischargePowerChannel().onSetNextValue(calculate);
+		this.getDcDischargePowerChannel().onSetNextValue(calculateInteger);
 		try {
-			this.getModule1DcwChannel().onSetNextValue(calculateF);
-			this.getModule2DcwChannel().onSetNextValue(calculateF);
+			this.getModule1DcwChannel().onSetNextValue(calculateFloat);
+			this.getModule2DcwChannel().onSetNextValue(calculateFloat);
 		} catch (OpenemsException e) {
 			// We should never land here
-			;
 		}
 	}
 
@@ -271,12 +274,9 @@ public class BatteryInverterSmaStpSeImpl extends AbstractSunSpecBatteryInverter
 	@Override
 	public Integer getDcPvPower() {
 		try {
-			return TypeUtils.sum(//
-					// TODO Catch null more elegantly maybe
-					this.getModule1DcwChannel().value() //
-							.orElse(0F).intValue(), //
-					this.getModule2DcwChannel().value() //
-							.orElse(0F).intValue());
+			// TODO Catch null more elegantly maybe
+			return this.getModule1DcwChannel().value().orElse(0F).intValue() //
+					+ this.getModule2DcwChannel().value().orElse(0F).intValue();
 		} catch (OpenemsException e) {
 			return null;
 		}

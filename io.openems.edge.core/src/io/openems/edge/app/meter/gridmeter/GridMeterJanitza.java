@@ -3,6 +3,8 @@ package io.openems.edge.app.meter.gridmeter;
 import static io.openems.common.types.MeterType.GRID;
 import static io.openems.edge.app.common.props.CommonProps.alias;
 import static io.openems.edge.app.common.props.CommonProps.defaultDef;
+import static io.openems.edge.core.appmanager.validator.Checkables.checkCommercial92;
+import static io.openems.edge.core.appmanager.validator.Checkables.checkCommercial92Master;
 import static io.openems.edge.core.appmanager.validator.Checkables.checkIndustrialL;
 import static io.openems.edge.core.appmanager.validator.Checkables.checkIndustrialXl;
 
@@ -21,7 +23,6 @@ import com.google.gson.JsonElement;
 
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.function.ThrowingTriFunction;
-import io.openems.common.oem.OpenemsEdgeOem;
 import io.openems.common.session.Language;
 import io.openems.common.session.Role;
 import io.openems.common.types.EdgeConfig;
@@ -91,7 +92,7 @@ public class GridMeterJanitza extends AbstractOpenemsAppWithProps<GridMeterJanit
 		ALIAS(alias()), //
 		MODEL(AppDef.copyOfGeneric(defaultDef(), def -> def //
 				.setTranslatedLabel("App.Meter.Janitza.productModel") //
-				.setDefaultValue(JanitzaMeter.JanitzaModel.UMG_96_RME) //
+				.setDefaultValue(JanitzaMeter.JanitzaModel.UMG_96_RME.getValue()) //
 				.setRequired(true) //
 				.setField(JsonFormlyUtil::buildSelect, (app, property, l, parameter, field) -> {
 					field.setOptions(
@@ -188,13 +189,6 @@ public class GridMeterJanitza extends AbstractOpenemsAppWithProps<GridMeterJanit
 	}
 
 	@Override
-	public AppDescriptor getAppDescriptor(OpenemsEdgeOem oem) {
-		return AppDescriptor.create() //
-				.setWebsiteUrl(oem.getAppWebsiteUrl(this.getAppId())) //
-				.build();
-	}
-
-	@Override
 	public OpenemsAppCardinality getCardinality() {
 		return OpenemsAppCardinality.SINGLE_IN_CATEGORY;
 	}
@@ -222,7 +216,10 @@ public class GridMeterJanitza extends AbstractOpenemsAppWithProps<GridMeterJanit
 	@Override
 	protected ValidatorConfig.Builder getValidateBuilder() {
 		return ValidatorConfig.create() //
-				.setCompatibleCheckableConfigs(checkIndustrialL().or(checkIndustrialXl()));
+				.setCompatibleCheckableConfigs(checkIndustrialL() //
+						.or(checkIndustrialXl()) //
+						.or(checkCommercial92()) //
+						.or(checkCommercial92Master()));
 	}
 
 	@Override

@@ -15,7 +15,7 @@ import com.google.gson.JsonObject;
 
 import io.openems.common.jscalendar.JSCalendar;
 import io.openems.common.jsonrpc.serialization.JsonSerializer;
-import io.openems.edge.common.meta.GridBuySoftLimit;
+import io.openems.edge.common.meta.GridBuyLimit;
 import io.openems.edge.energy.api.Environment;
 import io.openems.edge.energy.api.LogVerbosity;
 import io.openems.edge.energy.api.handler.EnergyScheduleHandler;
@@ -59,12 +59,10 @@ public record GlobalOptimizationContext(//
 	}
 
 	public record Grid(//
-			/** Max Buy-From-Grid Power [W] */
 			int maxBuyPower, //
-			/** Max Sell-To-Grid Power [W] */
-			int maxSellPower,
-			/** The Grid-Buy Soft-Limit [W] */
-			JSCalendar.Tasks<GridBuySoftLimit> gridBuySoftLimit) {
+			int maxSellPower, //
+			int maxSellPowerWithBuffer, //
+			JSCalendar.Tasks<GridBuyLimit.Soft> gridBuySoftLimit) {
 
 		/**
 		 * Returns a {@link JsonSerializer} for a {@link Grid}.
@@ -77,12 +75,14 @@ public record GlobalOptimizationContext(//
 				return new Grid(//
 						json.getInt("maxBuyPower"), //
 						json.getInt("maxSellPower"), //
-						json.getObject("gridBuySoftLimit", GridBuySoftLimit.tasksSerializer(clock)));
+						json.getInt("maxSellPowerWithBuffer"), //
+						json.getObject("gridBuySoftLimit", GridBuyLimit.Soft.tasksSerializer(clock)));
 			}, obj -> {
 				return buildJsonObject() //
 						.addProperty("maxBuyPower", obj.maxBuyPower) //
 						.addProperty("maxSellPower", obj.maxSellPower) //
-						.add("gridBuySoftLimit", obj.gridBuySoftLimit, GridBuySoftLimit.tasksSerializer(clock)) //
+						.addProperty("maxSellPowerWithBuffer", obj.maxSellPowerWithBuffer) //
+						.add("gridBuySoftLimit", obj.gridBuySoftLimit, GridBuyLimit.Soft.tasksSerializer(clock)) //
 						.build();
 			});
 		}

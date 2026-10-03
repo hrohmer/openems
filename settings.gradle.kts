@@ -4,12 +4,16 @@ pluginManagement {
 	val bndVersion = providers.gradleProperty("bnd_version").get()
 	val bndReleases = providers.gradleProperty("bnd_releases").get()
 
+	val nodeVersion = providers.gradleProperty("node_plugin.version").get()
+	val jacocologVersion = providers.gradleProperty("jacocolog_plugin.version").get()
+	val sonarqubeVersion = providers.gradleProperty("sonarqube_plugin.version").get()
+
 	plugins {
 		id("biz.aQute.bnd.workspace") version bndVersion
 		id("biz.aQute.bnd") version bndVersion
-		id("com.github.node-gradle.node") version "7.1.0"
-		id("org.barfuin.gradle.jacocolog") version "3.1.0"
-		id("org.sonarqube") version "7.2.0.6526"
+		id("com.github.node-gradle.node") version nodeVersion
+		id("org.barfuin.gradle.jacocolog") version jacocologVersion
+		id("org.sonarqube") version sonarqubeVersion
 	}
 	repositories {
 		maven {

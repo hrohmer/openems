@@ -6,6 +6,7 @@ import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE
 
 import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.Executors;
@@ -49,6 +50,8 @@ import io.openems.edge.predictor.api.common.TrainingError;
 import io.openems.edge.predictor.api.common.TrainingState;
 import io.openems.edge.predictor.api.mlcore.datastructures.Series;
 import io.openems.edge.predictor.api.mlcore.regression.RandomForestRegressor;
+import io.openems.edge.predictor.api.mlcore.smoothing.GaussianKernels;
+import io.openems.edge.predictor.api.mlcore.smoothing.GaussianSmoother;
 import io.openems.edge.predictor.api.prediction.AbstractPredictor;
 import io.openems.edge.predictor.api.prediction.Prediction;
 import io.openems.edge.predictor.api.prediction.Predictor;
@@ -108,6 +111,7 @@ public class PredictorProductionLinearModelImpl extends AbstractPredictor
 	private ModelBundle currentModel;
 	private SnowStateMachine snowStateMachine;
 	private PredictionPersistenceService predictionPersistenceService;
+	private ModelComplexity modelComplexity;
 	private int maxProduction = Integer.MAX_VALUE;
 
 	@Activate
@@ -120,6 +124,7 @@ public class PredictorProductionLinearModelImpl extends AbstractPredictor
 		}
 
 		this.productionChannelAddress = config.sourceChannel().channelAddress;
+		this.modelComplexity = config.modelComplexity();
 
 		this.predictionPersistenceService = new PredictionPersistenceService(//
 				this, //
@@ -280,19 +285,23 @@ public class PredictorProductionLinearModelImpl extends AbstractPredictor
 		var now = roundDownToQuarter(ZonedDateTime.now(this.componentManager.getClock()));
 		var timestampValueMap = series.toMap();
 
-		var predictedValues = new Integer[this.predictorConfig.forecastQuarters()];
+		var rawValues = new double[this.predictorConfig.forecastQuarters()];
 		for (int i = 0; i < this.predictorConfig.forecastQuarters(); i++) {
 			var expectedTime = now.plus(i * MINUTES_PER_QUARTER, MINUTES);
 			Double value = timestampValueMap.get(expectedTime);
-
 			if (value == null || Double.isNaN(value)) {
-				predictedValues[i] = null;
+				rawValues[i] = 0.0;
 			} else {
-				predictedValues[i] = (int) Math.round(value < 5 ? 0 : value);
+				rawValues[i] = Math.round(value < 5.0 ? 0.0 : value);
 			}
 		}
 
-		return Prediction.from(this.sum, channelAddress, now.toInstant(), predictedValues);
+		var smoothedValues = new GaussianSmoother(GaussianKernels.SIZE_9).smooth(rawValues);
+		var smoothedIntegerValues = Arrays.stream(smoothedValues)//
+				.mapToObj(value -> (int) Math.round(value))//
+				.toArray(Integer[]::new);
+
+		return Prediction.from(this.sum, channelAddress, now.toInstant(), smoothedIntegerValues);
 	}
 
 	private TrainingContext createTrainingContext() {
@@ -303,7 +312,7 @@ public class PredictorProductionLinearModelImpl extends AbstractPredictor
 				this.weather, //
 				this.productionChannelAddress, //
 				this.predictorConfig.trainingWindowInQuarters(), //
-				this.predictorConfig.regressorFitter(), //
+				this.predictorConfig.regressorFitter(this.modelComplexity), //
 				this.predictorConfig.minTrainingSamples(), //
 				this.predictorConfig.maxTrainingSamples());
 	}
@@ -408,8 +417,9 @@ public class PredictorProductionLinearModelImpl extends AbstractPredictor
 		}
 
 		@Override
-		public RegressorFitter regressorFitter() {
-			return (features, target) -> RandomForestRegressor.fit(features, target, this.regressorConfig());
+		public RegressorFitter regressorFitter(ModelComplexity modelComplexity) {
+			return (features, target) -> RandomForestRegressor.fit(features, target,
+					this.regressorConfig(modelComplexity));
 		}
 
 		@Override
@@ -427,9 +437,9 @@ public class PredictorProductionLinearModelImpl extends AbstractPredictor
 			return PredictionOrchestrator::new;
 		}
 
-		private RandomForestRegressor.Config regressorConfig() {
+		private RandomForestRegressor.Config regressorConfig(ModelComplexity modelComplexity) {
 			return new RandomForestRegressor.Config(//
-					100, // numTrees
+					modelComplexity.getNumTrees(), // numTrees
 					Integer.MAX_VALUE, // maxDepth
 					3.0f, // minChildWeight
 					0.0f, // minImpurityDecrease

@@ -1,30 +1,31 @@
-// @ts-strict-ignore
-import { ChangeDetectorRef, Component, Input, OnInit } from "@angular/core";
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit } from "@angular/core";
 import { PopoverController } from "@ionic/angular";
 import { TranslateService } from "@ngx-translate/core";
 import { CalAnimation, IAngularMyDpOptions, IMyDate, IMyDateRangeModel } from "@nodro7/angular-mydatepicker";
-import { addDays, endOfMonth, endOfWeek, endOfYear, getDate, getMonth, getYear, startOfMonth, startOfWeek, startOfYear } from "date-fns";
-import { EdgePermission, Service, Utils } from "src/app/shared/shared";
+import { addDays, endOfMonth, endOfWeek, endOfYear, getDate, getMonth, getYear, startOfMonth, startOfWeek, startOfYear, } from "date-fns";
+import { EdgePermission, Service } from "src/app/shared/shared";
 import { DefaultTypes } from "src/app/shared/type/defaulttypes";
-
 import { Language } from "src/app/shared/type/language";
+import { NumberUtils } from "src/app/shared/utils/number/number-utils";
 import { Edge } from "../../edge/edge";
 
 @Component({
     selector: "pickdatepopover",
     templateUrl: "./popover.component.html",
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.Eager,
     styles: [
         `
-        :host{
-             --width: fit-content !important;
-        }
+            :host {
+                --width: fit-content !important;
+            }
         `,
     ],
 })
 export class PickDatePopoverComponent implements OnInit {
+    private static readonly DEFAULT_DISABLE_UNTIL: IMyDate = { day: 1, month: 1, year: 2013 };
 
-    @Input() public setDateRange: (period: DefaultTypes.HistoryPeriod) => void;
+    @Input() public setDateRange!: (period: DefaultTypes.HistoryPeriod) => void;
     @Input() public edge: Edge | null = null;
     @Input() public historyPeriods: DefaultTypes.PeriodStringValues[] = [];
 
@@ -34,7 +35,6 @@ export class PickDatePopoverComponent implements OnInit {
     protected periods: string[] = [];
     protected readonly TOMORROW = addDays(new Date(), 1);
     protected myDpOptions: IAngularMyDpOptions = {
-
         stylesData: {
             selector: "dp1",
             styles: `
@@ -98,7 +98,7 @@ export class PickDatePopoverComponent implements OnInit {
         dateFormat: "dd.mm.yyyy",
         dateRange: true,
         disableSince: this.toIMyDate(this.TOMORROW),
-        disableUntil: { day: 1, month: 1, year: 2013 }, // TODO start with date since the edge is available
+        disableUntil: PickDatePopoverComponent.DEFAULT_DISABLE_UNTIL,
         inline: true,
         selectorHeight: "14.063em",
         selectorWidth: "15.688em",
@@ -112,7 +112,7 @@ export class PickDatePopoverComponent implements OnInit {
         public popoverCtrl: PopoverController,
         public translate: TranslateService,
         private cdr: ChangeDetectorRef,
-    ) { }
+    ) {}
 
     public onDateChanged(event: IMyDateRangeModel) {
         this.service.historyPeriod.next(new DefaultTypes.HistoryPeriod(event.beginJsDate, event.endJsDate));
@@ -121,13 +121,22 @@ export class PickDatePopoverComponent implements OnInit {
     }
 
     ngOnInit() {
-
         this.locale = Language.getCurrentLanguage().key;
+        const firstSetupProtocol = this.edge?.firstSetupProtocol;
         // Restrict user to pick date before ibn-date
-        this.myDpOptions.disableUntil = { day: Utils.subtractSafely(getDate(this.edge?.firstSetupProtocol), 1) ?? 1, month: Utils.addSafely(getMonth(this.edge?.firstSetupProtocol), 1) ?? 1, year: this.edge?.firstSetupProtocol?.getFullYear() ?? 2013 };
+        this.myDpOptions.disableUntil =
+            firstSetupProtocol !== undefined
+                ? {
+                      day: NumberUtils.subtractSafely(getDate(firstSetupProtocol), 1) ?? 1,
+                      month: NumberUtils.addSafely(getMonth(firstSetupProtocol), 1) ?? 1,
+                      year: firstSetupProtocol.getFullYear(),
+                  }
+                : PickDatePopoverComponent.DEFAULT_DISABLE_UNTIL;
 
         // Filter out custom due to different on click event
-        this.periods = EdgePermission.getAllowedHistoryPeriods(this.edge, this.historyPeriods).filter(period => period !== DefaultTypes.PeriodString.CUSTOM);
+        this.periods = EdgePermission.getAllowedHistoryPeriods(this.edge, this.historyPeriods).filter(
+            (period) => period !== DefaultTypes.PeriodString.CUSTOM,
+        );
     }
 
     /**
@@ -146,7 +155,12 @@ export class PickDatePopoverComponent implements OnInit {
                 break;
             }
             case DefaultTypes.PeriodString.WEEK: {
-                this.setDateRange(new DefaultTypes.HistoryPeriod(startOfWeek(this.TODAY, { weekStartsOn: 1 }), endOfWeek(this.TODAY, { weekStartsOn: 1 })));
+                this.setDateRange(
+                    new DefaultTypes.HistoryPeriod(
+                        startOfWeek(this.TODAY, { weekStartsOn: 1 }),
+                        endOfWeek(this.TODAY, { weekStartsOn: 1 }),
+                    ),
+                );
                 this.service.periodString = period;
                 this.popoverCtrl.dismiss();
                 break;
@@ -177,11 +191,10 @@ export class PickDatePopoverComponent implements OnInit {
     /**
      * Converts a 'Date' to 'IMyDate' format.
      *
-     * @param date the 'Date'
-     * @returns the 'IMyDate'
+     * @param date The 'Date'
+     * @returns The 'IMyDate'
      */
     private toIMyDate(date: Date): IMyDate {
         return { year: getYear(date), month: getMonth(date) + 1, day: getDate(date) };
     }
-
 }

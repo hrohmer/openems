@@ -64,12 +64,12 @@ class HeatAskomaImplTest {
 						.build()) //
 				.next(new TestCase("Task active at start: FAST_HEAT overrides config") //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, -10_050) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.FAST_HEAT) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.FAST_HEAT) //
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT)) //
 				.next(new TestCase("After task duration: fallback to configured OFF") //
 						.timeleap(clock, 2, ChronoUnit.HOURS) //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, 0) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.OFF) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.OFF) //
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.OFF)) //
 				.deactivate();
 	}
@@ -90,17 +90,17 @@ class HeatAskomaImplTest {
 						.build()) //
 				.next(new TestCase("Before task start: configured OFF is active") //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, 0) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.OFF) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.OFF) //
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.OFF)) //
 				.next(new TestCase("Task start reached: switch to FAST_HEAT") //
 						.timeleap(clock, 1, ChronoUnit.HOURS) //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, -10_050) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.FAST_HEAT) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.FAST_HEAT) //
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT)) //
 				.next(new TestCase("Task ended: switch back to configured OFF") //
 						.timeleap(clock, 1, ChronoUnit.HOURS) //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, 0) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.OFF) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.OFF) //
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.OFF)) //
 				.deactivate();
 	}
@@ -121,13 +121,13 @@ class HeatAskomaImplTest {
 				// Actual (50.0 °C) < Target (60.0 °C) → keep heating at maximum power
 				.next(new TestCase("Actual below target: keep heating") //
 						.input(Heat.ChannelId.TEMPERATURE, 500) // 50.0 °C in deci-degree
-						.input(HeatAskoma.ChannelId.TEMPERATURE_SETPOINT, 600) // 60.0 °C in deci-degree
+						.input(Heat.ChannelId.TARGET_TEMPERATURE, 600) // 60.0 °C in deci-degree
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, -10_050) //
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT)) //
 				// Actual (60.0 °C) >= Target (60.0 °C) → continue heating
 				.next(new TestCase("Actual reaches target: continue heating") //
 						.input(Heat.ChannelId.TEMPERATURE, 600) // 60.0 °C in deci-degree
-						.input(HeatAskoma.ChannelId.TEMPERATURE_SETPOINT, 600) // 60.0 °C in deci-degree
+						.input(Heat.ChannelId.TARGET_TEMPERATURE, 600) // 60.0 °C in deci-degree
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT) //
 						.onAfterControllersCallbacks(() -> { //
 							var config = configurationAdmin.getOrCreateEmptyConfiguration("component0"); //
@@ -153,7 +153,7 @@ class HeatAskomaImplTest {
 				.next(new TestCase("read-only: no control, MODE reflects configured mode, scheduler ignored") //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, null) //
 						.output(ManagedHeatElement.ChannelId.CONTROL_NOT_ALLOWED, true) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.FAST_HEAT)) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.FAST_HEAT)) //
 				.deactivate();
 	}
 
@@ -174,16 +174,16 @@ class HeatAskomaImplTest {
 				// Actual (50.0 °C) < target (60.0 °C) → keep heating at maximum power
 				.next(new TestCase("Actual below target: keep heating at max power") //
 						.input(Heat.ChannelId.TEMPERATURE, 500) // 50.0 °C in deci-degree
-						.input(HeatAskoma.ChannelId.TEMPERATURE_SETPOINT, 600) // 60.0 °C in deci-degree
+						.input(Heat.ChannelId.TARGET_TEMPERATURE, 600) // 60.0 °C in deci-degree
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, -10_050) //
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT)) //
 				// Advance clock past FAST_HEAT_DURATION (10 hours) → fast heat expires, mode
 				.next(new TestCase("fast heat expired: enter safety lockout and stop heating") //
 						.timeleap(clock, 10, ChronoUnit.HOURS) //
 						.input(Heat.ChannelId.TEMPERATURE, 500) // still below target
-						.input(HeatAskoma.ChannelId.TEMPERATURE_SETPOINT, 600) //
+						.input(Heat.ChannelId.TARGET_TEMPERATURE, 600) //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, 0) //
-						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT_PAUSE) //
+						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT_PROTECTION_PAUSE) //
 						.onAfterControllersCallbacks(() -> { //
 							var config = configurationAdmin.getOrCreateEmptyConfiguration("component0"); //
 							assertEquals(Mode.FAST_HEAT.name(), config.getProperties().get("mode").toString()); //
@@ -191,7 +191,7 @@ class HeatAskomaImplTest {
 				.next(new TestCase("within pause: heating stays off") //
 						.input(Heat.ChannelId.TEMPERATURE, 500) //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, 0) //
-						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT_PAUSE)) //
+						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT_PROTECTION_PAUSE)) //
 				.next(new TestCase("pause expired: heating restarts") //
 						.timeleap(clock, 1, ChronoUnit.HOURS) //
 						.input(Heat.ChannelId.TEMPERATURE, 500) //
@@ -202,11 +202,11 @@ class HeatAskomaImplTest {
 						.timeleap(clock, 10, ChronoUnit.HOURS) //
 						.input(Heat.ChannelId.TEMPERATURE, 500) //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, 0) //
-						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT_PAUSE)) //
+						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT_PROTECTION_PAUSE)) //
 				.next(new TestCase("second cycle: within pause, heating stays off") //
 						.input(Heat.ChannelId.TEMPERATURE, 500) //
 						.output(ManagedHeatElement.ChannelId.TARGET_GRID_ACTIVE_POWER, 0) //
-						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT_PAUSE)) //
+						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.FAST_HEAT_PROTECTION_PAUSE)) //
 				.next(new TestCase("second cycle: pause expired, heating restarts again") //
 						.timeleap(clock, 1, ChronoUnit.HOURS) //
 						.input(Heat.ChannelId.TEMPERATURE, 500) //
@@ -230,25 +230,114 @@ class HeatAskomaImplTest {
 						.setMaxHeatPower(MAX_HEAT_POWER) //
 						.build()) //
 				.next(new TestCase("FAST_HEAT started: warning is initially false") //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.FAST_HEAT) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.FAST_HEAT) //
 						.output(HeatAskoma.ChannelId.FAST_HEAT_POWER_NOT_APPLIED, false)) //
 				.next(new TestCase("before 5 minutes elapsed: warning stays false") //
 						.timeleap(clock, 4, ChronoUnit.MINUTES) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.FAST_HEAT) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.FAST_HEAT) //
 						.output(HeatAskoma.ChannelId.FAST_HEAT_POWER_NOT_APPLIED, false)) //
 				.next(new TestCase("after 5 minutes without response: warning turns true") //
 						.timeleap(clock, 1, ChronoUnit.MINUTES) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.FAST_HEAT) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.FAST_HEAT) //
 						.output(HeatAskoma.ChannelId.FAST_HEAT_POWER_NOT_APPLIED, true)) //
 				.next(new TestCase("active power response available: warning resets immediately") //
 						.input(ElectricityMeter.ChannelId.ACTIVE_POWER, 1000) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.FAST_HEAT) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.FAST_HEAT) //
 						.output(HeatAskoma.ChannelId.FAST_HEAT_POWER_NOT_APPLIED, false)) //
 				.next(new TestCase("task ended -> OFF: warning stays reset") //
 						.timeleap(clock, 6, ChronoUnit.MINUTES) //
-						.output(HeatAskoma.ChannelId.MODE, ChannelMode.OFF) //
+						.output(HeatAskoma.ChannelId.MODE, Mode.OFF) //
 						.output(HeatAskoma.ChannelId.STATE_MACHINE, State.OFF) //
 						.output(HeatAskoma.ChannelId.FAST_HEAT_POWER_NOT_APPLIED, false)) //
+				.deactivate();
+	}
+
+	@Test
+	void testRemainingHeatEnergyPositiveDelta() throws Exception {
+		new ControllerTest(new HeatAskomaImpl()) //
+				.addReference("configurationAdmin", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.activate(MyConfig.create() //
+						.setId("component0") //
+						.setModbusId("modbus0") //
+						.setReadOnly(true) //
+						.setEffectiveStorageVolume(300) //
+						.build()) //
+				.next(new TestCase() //
+						.input(Heat.ChannelId.TEMPERATURE, 400) // 40.0 °C
+						.input(Heat.ChannelId.TARGET_TEMPERATURE, 600) // 60.0 °C
+						// 300l * 1.163 Wh/(l*K) * 20K
+						.output(Heat.ChannelId.REMAINING_HEAT_ENERGY, 6978)) //
+				.deactivate();
+	}
+
+	@Test
+	void testRemainingHeatEnergyTargetEqualsActual() throws Exception {
+		new ControllerTest(new HeatAskomaImpl()) //
+				.addReference("configurationAdmin", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.activate(MyConfig.create() //
+						.setId("component0") //
+						.setModbusId("modbus0") //
+						.setReadOnly(true) //
+						.setEffectiveStorageVolume(300) //
+						.build()) //
+				.next(new TestCase() //
+						.input(Heat.ChannelId.TEMPERATURE, 600) //
+						.input(Heat.ChannelId.TARGET_TEMPERATURE, 600) //
+						.output(Heat.ChannelId.REMAINING_HEAT_ENERGY, 0)) //
+				.deactivate();
+	}
+
+	@Test
+	void testRemainingHeatEnergyActualAboveTarget() throws Exception {
+		new ControllerTest(new HeatAskomaImpl()) //
+				.addReference("configurationAdmin", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.activate(MyConfig.create() //
+						.setId("component0") //
+						.setModbusId("modbus0") //
+						.setReadOnly(true) //
+						.setEffectiveStorageVolume(300) //
+						.build()) //
+				.next(new TestCase() //
+						.input(Heat.ChannelId.TEMPERATURE, 650) //
+						.input(Heat.ChannelId.TARGET_TEMPERATURE, 600) //
+						.output(Heat.ChannelId.REMAINING_HEAT_ENERGY, 0)) //
+				.deactivate();
+	}
+
+	@Test
+	void testRemainingHeatEnergyMissingActualTemperature() throws Exception {
+		new ControllerTest(new HeatAskomaImpl()) //
+				.addReference("configurationAdmin", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.activate(MyConfig.create() //
+						.setId("component0") //
+						.setModbusId("modbus0") //
+						.setReadOnly(true) //
+						.setEffectiveStorageVolume(300) //
+						.build()) //
+				.next(new TestCase() //
+						.input(Heat.ChannelId.TARGET_TEMPERATURE, 600) //
+						.output(Heat.ChannelId.REMAINING_HEAT_ENERGY, null)) //
+				.deactivate();
+	}
+
+	@Test
+	void testRemainingHeatEnergyMissingTargetTemperature() throws Exception {
+		new ControllerTest(new HeatAskomaImpl()) //
+				.addReference("configurationAdmin", new DummyConfigurationAdmin()) //
+				.addReference("componentManager", new DummyComponentManager()) //
+				.activate(MyConfig.create() //
+						.setId("component0") //
+						.setModbusId("modbus0") //
+						.setReadOnly(true) //
+						.setEffectiveStorageVolume(300) //
+						.build()) //
+				.next(new TestCase() //
+						.input(Heat.ChannelId.TEMPERATURE, 400) //
+						.output(Heat.ChannelId.REMAINING_HEAT_ENERGY, null)) //
 				.deactivate();
 	}
 
@@ -276,7 +365,7 @@ class HeatAskomaImplTest {
 
 		assertEquals(//
 				new ChannelMetaInfo(597), //
-				sut.channel(HeatAskoma.ChannelId.TEMPERATURE_SETPOINT).getMetaInfo());
+				sut.channel(Heat.ChannelId.TARGET_TEMPERATURE).getMetaInfo());
 		assertEquals(//
 				new ChannelMetaInfo(638), //
 				sut.channel(Heat.ChannelId.TEMPERATURE).getMetaInfo());
@@ -308,7 +397,7 @@ class HeatAskomaImplTest {
 
 		assertEquals(//
 				new ChannelMetaInfo(597), //
-				sut.channel(HeatAskoma.ChannelId.TEMPERATURE_SETPOINT).getMetaInfo());
+				sut.channel(Heat.ChannelId.TARGET_TEMPERATURE).getMetaInfo());
 		assertEquals(//
 				new ChannelMetaInfo(638), //
 				sut.channel(Heat.ChannelId.TEMPERATURE).getMetaInfo());

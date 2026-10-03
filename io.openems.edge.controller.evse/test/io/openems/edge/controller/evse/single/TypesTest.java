@@ -15,7 +15,6 @@ import java.util.stream.IntStream;
 import org.junit.Test;
 
 import io.openems.edge.controller.evse.single.Types.History;
-import io.openems.edge.controller.evse.single.Types.Hysteresis;
 
 public class TypesTest {
 
@@ -28,12 +27,12 @@ public class TypesTest {
 
 		IntStream.range(0, 400) //
 				.forEach(i -> {
-					h.addEntry(now.plusSeconds(i), 0, i, true);
+					h.addEntry(now.plusSeconds(i), 0, i, i, true);
 
 					switch (i) {
 					// Test streamAllButLast() vs streamAll()
 					case 49 -> {
-						h.addEntry(now.plusSeconds(i), 999, 0, false);
+						h.addEntry(now.plusSeconds(i), 999, 0, 0, false);
 						assertEquals(999, h.getLastEntry().getValue().activePower().intValue());
 
 						assertTrue(allActivePowersAreZero(h.streamAllButLast()));
@@ -59,22 +58,22 @@ public class TypesTest {
 	}
 
 	@Test
-	public void testHysteresis() {
+	public void testAutomaticPhaseSwitchRequiresMinimumSampleCount() {
 		var now = Instant.now(createDummyClock());
 		var h = new History();
-		h.addEntry(now.minusSeconds(310), null, 7000, true);
-		h.addEntry(now.minusSeconds(300), null, 8000, true);
-		h.addEntry(now.minusSeconds(290), null, 9000, true);
-		assertEquals(Hysteresis.INACTIVE, Hysteresis.from(h));
-	}
 
-	@Test
-	public void testHysteresis2() {
-		var now = Instant.now(createDummyClock());
-		var h = new History();
-		h.addEntry(now.minusSeconds(310), null, 7000, true);
-		h.addEntry(now.minusSeconds(300), null, 8000, false);
-		assertEquals(Hysteresis.KEEP_CHARGING, Hysteresis.from(h));
+		for (int i = 0; i < 59; i++) {
+			var evaluation = h.evaluateAutomaticPhaseSwitchSetPointWithoutPhaseLimitation(now.plusSeconds(i), 5_000,
+					4_100, History.AutomaticPhaseSwitchThresholdDirection.ABOVE);
+			assertFalse(evaluation.shouldSwitch());
+			assertEquals(i + 1, evaluation.sampleCount());
+			h.addEntry(now.plusSeconds(i), 1_000, 1_000, 5_000, true);
+		}
+
+		var sixtiethEvaluation = h.evaluateAutomaticPhaseSwitchSetPointWithoutPhaseLimitation(now.plusSeconds(59),
+				5_000, 4_100, History.AutomaticPhaseSwitchThresholdDirection.ABOVE);
+		assertTrue(sixtiethEvaluation.shouldSwitch());
+		assertEquals(60, sixtiethEvaluation.sampleCount());
 	}
 
 }

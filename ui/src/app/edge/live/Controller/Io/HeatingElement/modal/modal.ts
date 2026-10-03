@@ -1,24 +1,24 @@
 // @ts-strict-ignore
-import { Component, OnInit } from "@angular/core";
+import { ChangeDetectionStrategy, Component, OnInit } from "@angular/core";
 import { FormControl, FormGroup } from "@angular/forms";
 import { AbstractModal } from "src/app/shared/components/modal/abstractModal";
 import { Formatter } from "src/app/shared/components/shared/formatter";
 import { ChannelAddress, CurrentData, EdgeConfig } from "src/app/shared/shared";
 import { Mode, WorkMode } from "src/app/shared/type/general";
 import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
+import { NumberUtils } from "src/app/shared/utils/number/number-utils";
 import { Utils } from "src/app/shared/utils/utils";
+import { SharedControllerIoHeatingElement } from "../shared/shared";
 import { getInactiveIfPowerIsLow, getRunStateConverter, Level, State, Unit } from "../util/utils";
 
 @Component({
     selector: "heatingelement-modal",
     templateUrl: "./modal.html",
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false,
 })
 export class ModalComponent extends AbstractModal implements OnInit {
-
     private static PROPERTY_MODE: string = "_PropertyMode";
-    private static PREDICTED_PV_PRODUCTION_HOUR = 5;
-    private static POWER_OVERSHOOT_FACTOR = 1.1;
     protected readonly CONVERT_HEATING_ELEMENT_RUNSTATE = getRunStateConverter(this.translate);
     protected mode: string;
     protected runState: State;
@@ -36,19 +36,24 @@ export class ModalComponent extends AbstractModal implements OnInit {
     // TODO remove when outputting of event is errorless possible
     /**
      * An Eventhandler for the toggle
-     * @param event the event object from the toogle interaction
-     * @param workMode the name of the work mode to activate
+     *
+     * @param event The event object from the toogle interaction
+     * @param workMode The name of the work mode to activate
      */
     protected switchWorkMode(event, workMode: string): void {
-        event.detail.checked ? this.formGroup.controls["workMode"].setValue(workMode) : this.formGroup.controls["workMode"].setValue("NONE");
+        event.detail.checked
+            ? this.formGroup.controls["workMode"].setValue(workMode)
+            : this.formGroup.controls["workMode"].setValue("NONE");
         this.formGroup.controls["workMode"].markAsDirty();
     }
 
     protected override onIsInitialized(): void {
-        this.subscription.add(this.formGroup.get("minEnergyLimitInKwh").valueChanges.subscribe((newValue) => {
-            this.formGroup.controls["minEnergylimit"].setValue(newValue * 1000);
-            this.formGroup.controls["minEnergylimit"].markAsDirty();
-        }));
+        this.subscription.add(
+            this.formGroup.get("minEnergyLimitInKwh").valueChanges.subscribe((newValue) => {
+                this.formGroup.controls["minEnergylimit"].setValue(newValue * 1000);
+                this.formGroup.controls["minEnergylimit"].markAsDirty();
+            }),
+        );
     }
 
     protected getRequiredPower(currentEnergy: number): number | null {
@@ -88,16 +93,12 @@ export class ModalComponent extends AbstractModal implements OnInit {
     }
 
     protected override getChannelAddresses(): ChannelAddress[] {
-
         AssertionUtils.assertIsDefined<EdgeConfig.Component>(this.component, "Heating element can't be found");
 
         this.outputChannelArray.push(
-            ChannelAddress.fromString(
-                this.component.properties["outputChannelPhaseL1"]),
-            ChannelAddress.fromString(
-                this.component.properties["outputChannelPhaseL2"]),
-            ChannelAddress.fromString(
-                this.component.properties["outputChannelPhaseL3"]),
+            ChannelAddress.fromString(this.component.properties["outputChannelPhaseL1"]),
+            ChannelAddress.fromString(this.component.properties["outputChannelPhaseL2"]),
+            ChannelAddress.fromString(this.component.properties["outputChannelPhaseL3"]),
         );
 
         const channelAddresses: ChannelAddress[] = [
@@ -107,7 +108,6 @@ export class ModalComponent extends AbstractModal implements OnInit {
             new ChannelAddress(this.component.id, "Status"),
             new ChannelAddress(this.component.id, ModalComponent.PROPERTY_MODE),
             new ChannelAddress(this.component.id, "_PropertyWorkMode"),
-
         ];
 
         if ("meter.id" in this.component.properties) {
@@ -116,7 +116,7 @@ export class ModalComponent extends AbstractModal implements OnInit {
                 new ChannelAddress(this.component.id, "Phase1AvgPower"),
                 new ChannelAddress(this.component.id, "Phase2AvgPower"),
                 new ChannelAddress(this.component.id, "Phase3AvgPower"),
-                new ChannelAddress(this.component.id, "SessionEnergy")
+                new ChannelAddress(this.component.id, "SessionEnergy"),
             );
         }
 
@@ -142,18 +142,29 @@ export class ModalComponent extends AbstractModal implements OnInit {
         const avgPowerPhase3 = currentData.allComponents[this.component.id + "/Phase3AvgPower"];
         const totalPower = Utils.addSafely(avgPowerPhase1, avgPowerPhase2, avgPowerPhase3);
 
-        if (totalPower !== null && totalPower / 1000 * ModalComponent.PREDICTED_PV_PRODUCTION_HOUR > this.maxPower) {
-            this.maxPower = Math.round(totalPower / 1000) * ModalComponent.PREDICTED_PV_PRODUCTION_HOUR;
+        if (
+            totalPower !== null &&
+            NumberUtils.multiplySafely(
+                (NumberUtils.divideSafely(totalPower, 1000),
+                SharedControllerIoHeatingElement.PREDICTED_PV_PRODUCTION_HOUR),
+            ) > this.maxPower
+        ) {
+            this.maxPower = NumberUtils.multiplySafely(
+                Math.round(NumberUtils.divideSafely(totalPower, 1000)),
+                SharedControllerIoHeatingElement.PREDICTED_PV_PRODUCTION_HOUR,
+            );
         }
 
         const currentEnergy = currentData.allComponents[this.component.id + "/SessionEnergy"];
         this.requiredPower = this.getRequiredPower(currentEnergy);
-        this.isUnreachable = this.requiredPower !== null ? this.requiredPower > totalPower * ModalComponent.POWER_OVERSHOOT_FACTOR : false;
+        this.isUnreachable =
+            this.requiredPower !== null
+                ? this.requiredPower > totalPower * SharedControllerIoHeatingElement.POWER_OVERSHOOT_FACTOR
+                : false;
         this.runState = getInactiveIfPowerIsLow(this.runState, activePower);
     }
 
     protected override getFormGroup(): FormGroup {
-
         const group: FormGroup = this.formBuilder.group({
             minTime: new FormControl(this.component.properties.minTime),
             minKwh: new FormControl(this.component.properties.minKwh),

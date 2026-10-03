@@ -16,7 +16,8 @@ import static java.lang.Math.round;
 
 import java.time.Duration;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -43,6 +44,7 @@ import io.openems.common.types.HttpStatus;
 import io.openems.common.types.OpenemsType;
 import io.openems.common.utils.FunctionUtils;
 import io.openems.common.utils.JsonUtils;
+import io.openems.common.utils.LatestWinsFutureExecutor;
 import io.openems.edge.bridge.http.cycle.HttpBridgeCycleService;
 import io.openems.edge.bridge.http.cycle.HttpBridgeCycleServiceDefinition;
 import io.openems.edge.common.channel.Channel;
@@ -50,6 +52,7 @@ import io.openems.edge.common.channel.ChannelId;
 import io.openems.edge.common.channel.StringReadChannel;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.type.TypeUtils;
+import io.openems.edge.evse.api.common.ApplyPhaseSwitch;
 import io.openems.edge.evse.chargepoint.hardybarth.common.HardyBarth.PathProvider;
 import io.openems.edge.meter.api.PhaseRotation;
 
@@ -72,7 +75,9 @@ public abstract class AbstractHardyBarthHandler<T extends HardyBarth> {
 	private final BridgeHttpFactory httpBridgeFactory;
 	private final HttpBridgeCycleService cycleService;
 	private final HttpBridgeTimeService timeService;
-	private BridgeHttp httpBridge;
+	private final BridgeHttp httpBridge;
+	private final LatestWinsFutureExecutor targetExecutor = new LatestWinsFutureExecutor();
+	private boolean wasLastTargetWriteSuccessful = true;
 
 	protected AbstractHardyBarthHandler(T parent, String ip, String apikey, PhaseRotation phaseRotation,
 			LogVerbosity logVerbosity, BiConsumer<Logger, String> logInfo, BridgeHttpFactory httpBridgeFactory,
@@ -84,7 +89,6 @@ public abstract class AbstractHardyBarthHandler<T extends HardyBarth> {
 		this.logInfoCallback = logInfo;
 		this.httpBridgeFactory = httpBridgeFactory;
 		this.httpBridge = httpBridgeFactory.get();
-
 		this.cycleService = this.httpBridge.createService(httpBridgeCycleServiceDefinition);
 		this.cycleService.subscribeCycle(1, //
 				this.createEndpoint(GET, "/api", null), //
@@ -96,8 +100,9 @@ public abstract class AbstractHardyBarthHandler<T extends HardyBarth> {
 		this.timeService = this.httpBridge.createService(HttpBridgeTimeServiceDefinition.INSTANCE);
 		var delay = Delay.of(Duration.ofSeconds(HEART_BEAT_TIME));
 		var heartBeat = parent.isReadOnly() ? "off" : "on";
-		this.timeService.subscribeTime(new DefaultDelayTimeProvider(() -> Delay.immediate(), //
-				t -> delay, error -> delay),
+		this.timeService.subscribeTime(//
+				new DefaultDelayTimeProvider<>(() -> Delay.immediate(), //
+						t -> delay, error -> delay),
 				this.createEndpoint(PUT, "/api/secc", buildJsonObject() //
 						.addProperty("salia/heartbeat", heartBeat) //
 						.build()),
@@ -116,8 +121,8 @@ public abstract class AbstractHardyBarthHandler<T extends HardyBarth> {
 	 * Called on deactivate.
 	 */
 	public void deactivate() {
+		this.targetExecutor.cancel();
 		this.httpBridgeFactory.unget(this.httpBridge);
-		this.httpBridge = null;
 	}
 
 	/**
@@ -229,28 +234,75 @@ public abstract class AbstractHardyBarthHandler<T extends HardyBarth> {
 	/**
 	 * Set current target to the charger.
 	 * 
+	 * <p>
+	 * This method is non-blocking: it returns as soon as the target was either
+	 * dispatched immediately or coalesced as the next pending target. It does
+	 * <b>not</b> wait for or confirm an HTTP response. At most one target write is
+	 * ever in flight; if a new target arrives while one is in flight, only the
+	 * latest target is kept and sent right after the current write completes. The
+	 * outcome of the last completed write is reported asynchronously via
+	 * {@link HardyBarth.ChannelId#TARGET_WRITE_FAILED}.
+	 *
 	 * @param current current target in A
-	 * @return boolean if the target was set
-	 * @throws OpenemsNamedException on error
+	 * @return true if the HTTP request was started or the target was retained as
+	 *         the latest pending value; false if target writing was cancelled
+	 *         during deactivation. A true result does not confirm a successful HTTP
+	 *         response.
 	 */
+	// TODO Remove the RejectedExecutionException compatibility mapping and change
+	// this method to return void when the legacy EVCS implementation is removed.
+	// The EVSE API does not expect a return value.
 	public boolean setTarget(int current) {
 		switch (this.logVerbosity) {
 		case NONE, DEBUG_LOG -> doNothing();
 		case WRITES, READS -> this.logInfo("Set Target=" + current);
 		}
 
+		try {
+			this.targetExecutor.execute(//
+					() -> this.dispatchTarget(current), //
+					(response, error) -> this.onTargetWriteComplete(current, response, error));
+			return true;
+		} catch (RejectedExecutionException e) {
+			return false;
+		}
+	}
+
+	private CompletableFuture<HttpResponse<String>> dispatchTarget(int current) {
 		final var ep = this.createEndpoint(PUT, "/api/secc", buildJsonObject() //
 				.addProperty("grid_current_limit", current) //
 				.build());
+		return this.httpBridge.request(ep);
+	}
 
-		final var result = this.httpBridge.requestJson(ep);
-		try {
-			return result.get().status().equals(HttpStatus.OK);
+	private static boolean isTargetWriteSuccessful(HttpResponse<String> response) {
+		return response != null && response.status().equals(HttpStatus.OK);
+	}
 
-		} catch (InterruptedException | ExecutionException e) {
-			this.log.error("Unable to set EVCS Target");
-			return false;
+	/**
+	 * Handles completion of a target write and updates the
+	 * {@link HardyBarth.ChannelId#TARGET_WRITE_FAILED} channel.
+	 *
+	 * @param justSentTarget the target that was just sent
+	 * @param response       the HTTP response, or null
+	 * @param error          the request error, or null
+	 */
+	private void onTargetWriteComplete(Integer justSentTarget, HttpResponse<String> response, Throwable error) {
+		final var successful = error == null && isTargetWriteSuccessful(response);
+		setValue(this.parent, HardyBarth.ChannelId.TARGET_WRITE_FAILED, !successful);
+
+		if (!successful && this.wasLastTargetWriteSuccessful) {
+			this.logTargetWriteFailure(justSentTarget, response, error);
 		}
+		this.wasLastTargetWriteSuccessful = successful;
+	}
+
+	private void logTargetWriteFailure(int target, HttpResponse<String> response, Throwable error) {
+		final var status = response == null ? "n/a" : response.status().toString();
+		final var body = response == null ? "n/a" : response.data();
+		this.log.error("Unable to set charge point target=" + target //
+				+ ", status=" + status //
+				+ ", body=" + body, error);
 	}
 
 	private Endpoint createEndpoint(HttpMethod httpMethod, String url, JsonObject body) {
@@ -264,6 +316,34 @@ public abstract class AbstractHardyBarthHandler<T extends HardyBarth> {
 			endpoint.setHeader("apikey", this.apikey);
 		}
 		return endpoint.build();
+	}
+
+	/**
+	 * Triggers a phase switch.
+	 * 
+	 * @param phaseSwitch the intended
+	 *                    {@link io.openems.edge.evse.api.common.ApplyPhaseSwitch.PhaseSwitchDirection}
+	 */
+	public void triggerPhaseSwitch(ApplyPhaseSwitch.PhaseSwitchDirection phaseSwitch) {
+		String phase = switch (phaseSwitch) {
+		case TO_SINGLE_PHASE -> "1";
+		case TO_THREE_PHASE -> "3";
+		case null -> null;
+		};
+
+		if (phase == null) {
+			return;
+		}
+		this.httpBridge //
+				.requestJson(this.createEndpoint(PUT, "/api", JsonUtils.buildJsonObject() //
+						.addProperty("salia/phase_switching/setphase", phase) //
+						.build())) //
+				.thenAccept(t -> {
+					switch (this.logVerbosity) {
+					case NONE -> FunctionUtils.doNothing();
+					case DEBUG_LOG, WRITES, READS -> this.logInfo("Triggered PhaseSwitch to " + phase + " phase");
+					}
+				});
 	}
 
 	/**
@@ -285,6 +365,8 @@ public abstract class AbstractHardyBarthHandler<T extends HardyBarth> {
 				.map(Channel::channelId) //
 				.filter(PathProvider.class::isInstance) //
 				.map(PathProvider.class::cast) //
+				// Do not overwrite manually managed channels with null.
+				.filter(c -> c.getPath().jsonPaths().length > 0) //
 				.forEach(c -> {
 					final var channelId = (io.openems.edge.common.channel.ChannelId) c;
 					final var path = c.getPath();
@@ -292,7 +374,28 @@ public abstract class AbstractHardyBarthHandler<T extends HardyBarth> {
 							path.jsonPaths());
 					setValue(this.parent, channelId, value);
 				});
+		final var deviceRole = this.updateDeviceRole(json);
+		this.updatePhaseSwitchingNotSlave(json, deviceRole);
 		this.updateChannels(json, phaseRotation);
+	}
+
+	private DeviceRole updateDeviceRole(JsonObject json) {
+		final var modelName = getValueFromJson(OpenemsType.STRING, json,
+				value -> TypeUtils.<String>getAsType(OpenemsType.STRING, value), "device", "modelname");
+		final var product = getValueFromJson(OpenemsType.STRING, json,
+				value -> TypeUtils.<String>getAsType(OpenemsType.STRING, value), "device", "product");
+		final var deviceRole = DeviceRole.fromModelNameAndProduct(modelName, product);
+		setValue(this.parent, HardyBarth.ChannelId.DEVICE_ROLE, deviceRole.getValue());
+		return deviceRole;
+	}
+
+	private void updatePhaseSwitchingNotSlave(JsonObject json, DeviceRole deviceRole) {
+		final var phaseSwitchingStatus = getValueFromJson(OpenemsType.STRING, json,
+				value -> TypeUtils.<String>getAsType(OpenemsType.STRING, value), "secc", "port0", "salia",
+				"phase_switching", "status");
+		final var hasPhaseSwitchingApi = "idle".equals(phaseSwitchingStatus) || "progress".equals(phaseSwitchingStatus);
+		setValue(this.parent, HardyBarth.ChannelId.PHASE_SWITCHING_NOT_SLAVE,
+				hasPhaseSwitchingApi && deviceRole == DeviceRole.MASTER);
 	}
 
 	/**

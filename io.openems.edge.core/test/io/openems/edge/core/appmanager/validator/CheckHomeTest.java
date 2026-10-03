@@ -4,8 +4,8 @@ import static io.openems.edge.common.test.DummyUser.DUMMY_ADMIN;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableList;
 
@@ -23,10 +23,9 @@ import io.openems.edge.core.appmanager.jsonrpc.AddAppInstance;
 public class CheckHomeTest {
 
 	private AppManagerTestBundle appManagerTestBundle;
-
 	private CheckHome checkHome;
 
-	@Before
+	@BeforeEach
 	public void setUp() throws Exception {
 		this.appManagerTestBundle = new AppManagerTestBundle(null, null, t -> {
 			return ImmutableList.of(//
@@ -77,11 +76,11 @@ public class CheckHomeTest {
 	}
 
 	@Test
-	public void testGetErrorMessage() {
+	public void testGetValidationError() {
 		final var dt = TranslationUtil.enableDebugMode();
 		for (var l : Language.values()) {
-			this.checkHome.getErrorMessage(l);
-			this.checkHome.getInvertedErrorMessage(l);
+			this.checkHome.getValidationError(l);
+			this.checkHome.getInvertedValidationError(l);
 		}
 		assertTrue(dt.getMissingKeys().isEmpty());
 	}

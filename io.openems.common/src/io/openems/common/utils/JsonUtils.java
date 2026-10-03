@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -381,6 +382,22 @@ public final class JsonUtils {
 		}
 
 		/**
+		 * Add a {@link LocalTime} value to the {@link JsonObject}.
+		 *
+		 * <p>
+		 * The value gets added in the format of
+		 * {@link DateTimeFormatter#ISO_LOCAL_TIME}.
+		 *
+		 * @param property the key
+		 * @param value    the value
+		 * @return the {@link JsonObjectBuilder}
+		 */
+		public JsonObjectBuilder addProperty(String property, LocalTime value) {
+			this.j.addProperty(property, value == null ? null : value.format(DateTimeFormatter.ISO_LOCAL_TIME));
+			return this;
+		}
+
+		/**
 		 * Add a Duration value to the {@link JsonObject}.
 		 *
 		 * @param property the key
@@ -520,6 +537,24 @@ public final class JsonUtils {
 		 * @return the {@link JsonObjectBuilder}
 		 */
 		public JsonObjectBuilder addPropertyIfNotNull(String property, LocalDate value) {
+			if (value != null) {
+				this.addProperty(property, value);
+			}
+			return this;
+		}
+
+		/**
+		 * Add a {@link LocalTime} value to the {@link JsonObject} if it is not null.
+		 *
+		 * <p>
+		 * The value gets added in the format of
+		 * {@link DateTimeFormatter#ISO_LOCAL_TIME}.
+		 *
+		 * @param property the key
+		 * @param value    the value
+		 * @return the {@link JsonObjectBuilder}
+		 */
+		public JsonObjectBuilder addPropertyIfNotNull(String property, LocalTime value) {
 			if (value != null) {
 				this.addProperty(property, value);
 			}
@@ -937,6 +972,18 @@ public final class JsonUtils {
 	}
 
 	/**
+	 * Gets the member of the {@link JsonElement} as {@link String} if it exists; or
+	 * `null` otherwise.
+	 *
+	 * @param jElement   the {@link JsonElement}
+	 * @param memberName the name of the member
+	 * @return the {@link String} value; or null
+	 */
+	public static String getAsStringOrNull(JsonElement jElement, String memberName) {
+		return toString(toPrimitive(toSubElement(jElement, memberName)));
+	}
+
+	/**
 	 * Converts a {@link JsonArray} to a String Array.
 	 *
 	 * @param json the {@link JsonArray}
@@ -1007,6 +1054,18 @@ public final class JsonUtils {
 	 */
 	public static Optional<Boolean> getAsOptionalBoolean(JsonElement jElement, String memberName) {
 		return Optional.ofNullable(toBoolean(toPrimitive(toSubElement(jElement, memberName))));
+	}
+
+	/**
+	 * Gets the member of the {@link JsonElement} as {@link Boolean} if it exists;
+	 * or `null` otherwise.
+	 *
+	 * @param jElement   the {@link JsonElement}
+	 * @param memberName the name of the member
+	 * @return the {@link Boolean} value; or null
+	 */
+	public static Boolean getAsBooleanOrNull(JsonElement jElement, String memberName) {
+		return toBoolean(toPrimitive(toSubElement(jElement, memberName)));
 	}
 
 	/**
@@ -1128,6 +1187,18 @@ public final class JsonUtils {
 	 */
 	public static Optional<Integer> getAsOptionalInt(JsonElement jElement, String memberName) {
 		return Optional.ofNullable(toInt(toPrimitive(toSubElement(jElement, memberName))));
+	}
+
+	/**
+	 * Gets the member of the {@link JsonElement} as {@link Integer} if it exists;
+	 * or `null` otherwise.
+	 *
+	 * @param jElement   the {@link JsonElement}
+	 * @param memberName the name of the member
+	 * @return the {@link Integer} value; or null
+	 */
+	public static Integer getAsIntOrNull(JsonElement jElement, String memberName) {
+		return toInt(toPrimitive(toSubElement(jElement, memberName)));
 	}
 
 	/**
@@ -1285,6 +1356,18 @@ public final class JsonUtils {
 	 */
 	public static Optional<Double> getAsOptionalDouble(JsonElement jElement, String memberName) {
 		return Optional.ofNullable(toDouble(toPrimitive(toSubElement(jElement, memberName))));
+	}
+
+	/**
+	 * Gets the member of the {@link JsonElement} as {@link Double} if it exists; or
+	 * `null` otherwise.
+	 *
+	 * @param jElement   the {@link JsonElement}
+	 * @param memberName the name of the member
+	 * @return the {@link Double} value; or null
+	 */
+	public static Double getAsDoubleOrNull(JsonElement jElement, String memberName) {
+		return toDouble(toPrimitive(toSubElement(jElement, memberName)));
 	}
 
 	/**

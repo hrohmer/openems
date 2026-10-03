@@ -10,7 +10,7 @@ import { ControllerHeat } from "./history/heat-history";
 import de from "./i18n/de.json";
 import en from "./i18n/en.json";
 import { ControllerHeatModalComponent } from "./modal/modal";
-import { ControllerHeatHomeComponent } from "./new-navigation/new-navigation";
+import { ControllerHeatHomeComponent } from "./new-navigation/heat-home";
 import { HeatScheduleComponent } from "./schedule/schedule.component";
 import { HeatAddTaskComponent } from "./schedule/task/add/add";
 import { HeatEditTaskComponent } from "./schedule/task/edit/edit";
@@ -38,14 +38,8 @@ function initializeHeatTranslations(translate: TranslateService): void {
         ControllerHeatSettingsComponent,
         ControllerHeatHomeComponent,
     ],
-    declarations: [
-        ControllerHeatComponent,
-        ControllerHeatModalComponent,
-    ],
+    declarations: [ControllerHeatComponent, ControllerHeatModalComponent],
     providers: [provideEnvironmentInitializer(() => initializeHeatTranslations(inject(TranslateService)))],
-    exports: [
-        ControllerHeatComponent,
-        ControllerHeat,
-    ],
+    exports: [ControllerHeatComponent, ControllerHeat],
 })
-export class ControllerHeatModule { }
+export class ControllerHeatModule {}

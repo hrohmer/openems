@@ -1,15 +1,15 @@
 package io.openems.edge.common.test;
 
 import java.time.ZoneId;
+import java.util.function.Consumer;
 
 import io.openems.common.channel.AccessMode;
 import io.openems.common.jscalendar.JSCalendar;
-import io.openems.common.jscalendar.JSCalendar.Tasks;
 import io.openems.common.oem.DummyOpenemsEdgeOem;
 import io.openems.common.oem.OpenemsEdgeOem;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.currency.Currency;
-import io.openems.edge.common.meta.GridBuySoftLimit;
+import io.openems.edge.common.meta.GridBuyLimit;
 import io.openems.edge.common.meta.Meta;
 import io.openems.edge.common.meta.ThirdPartyUsageAcceptance;
 import io.openems.edge.common.meta.types.Coordinates;
@@ -27,8 +27,10 @@ public class DummyMeta extends AbstractDummyOpenemsComponent<DummyMeta> implemen
 	private Coordinates coordinates;
 	private ZoneId timezone;
 	private int gridSellHardLimit;
-	private int gridBuyHardLimit;
-	private JSCalendar.Tasks<GridBuySoftLimit> gridBuySoftLimit = JSCalendar.Tasks.empty();
+	private int gridSellHardLimitWithBuffer;
+	private GridBuyLimit gridBuyLimit = new GridBuyLimit(//
+			new GridBuyLimit.Hard(0), //
+			JSCalendar.Tasks.empty());
 	private ThirdPartyUsageAcceptance thirdPartyUsageAcceptance;
 
 	public DummyMeta() {
@@ -83,13 +85,26 @@ public class DummyMeta extends AbstractDummyOpenemsComponent<DummyMeta> implemen
 	}
 
 	@Override
-	public int getGridBuyHardLimit() {
-		return this.gridBuyHardLimit;
+	public int getGridSellHardLimitWithBuffer() {
+		return this.gridSellHardLimitWithBuffer;
 	}
 
 	@Override
-	public Tasks<GridBuySoftLimit> getGridBuySoftLimit() {
-		return this.gridBuySoftLimit;
+	public int getEssDischargeToGridLimit() {
+		if (this.getIsEssDischargeToGridAllowed()) {
+			return this.gridSellHardLimit;
+		}
+		return 0;
+	}
+
+	@Override
+	public GridBuyLimit getGridBuyLimit() {
+		return this.gridBuyLimit;
+	}
+
+	@Override
+	public ThirdPartyUsageAcceptance getThirdPartyUsageAcceptance() {
+		return this.thirdPartyUsageAcceptance;
 	}
 
 	/**
@@ -198,26 +213,51 @@ public class DummyMeta extends AbstractDummyOpenemsComponent<DummyMeta> implemen
 	}
 
 	/**
-	 * Sets the Grid-Buy Hard-Limit for this {@link DummyMeta} instance and returns
-	 * the instance itself.
+	 * Sets the Grid-Sell Hard-Limit with safety buffer for this {@link DummyMeta}
+	 * instance and returns the instance itself.
 	 *
-	 * @param gridBuyHardLimit the value
+	 * @param gridSellHardLimitWithBuffer the value
 	 * @return myself
 	 */
-	public DummyMeta withGridBuyHardLimit(int gridBuyHardLimit) {
-		this.gridBuyHardLimit = gridBuyHardLimit;
+	public DummyMeta withGridSellHardLimitWithBuffer(int gridSellHardLimitWithBuffer) {
+		this.gridSellHardLimitWithBuffer = gridSellHardLimitWithBuffer;
 		return this.self();
 	}
 
 	/**
-	 * Sets the {@link GridBuySoftLimit} for this {@link DummyMeta} instance and
-	 * returns the instance itself.
+	 * Set {@link Meta.ChannelId#IS_ESS_DISCHARGE_TO_GRID_ALLOWED}.
 	 *
-	 * @param gridBuySoftLimit the {@link GridBuySoftLimit}
+	 * @param value the value
 	 * @return myself
 	 */
-	public DummyMeta withGridBuySoftLimit(JSCalendar.Tasks<GridBuySoftLimit> gridBuySoftLimit) {
-		this.gridBuySoftLimit = gridBuySoftLimit;
+	public DummyMeta withIsEssDischargeToGridAllowed(boolean value) {
+		TestUtils.withValue(this, Meta.ChannelId.IS_ESS_DISCHARGE_TO_GRID_ALLOWED, value);
+		return this.self();
+	}
+
+	/**
+	 * Sets the {@link GridBuyLimit} for this {@link DummyMeta} instance and returns
+	 * the instance itself.
+	 *
+	 * @param gridBuyLimit the grid-buy limit
+	 * @return myself
+	 */
+	public DummyMeta withGridBuyLimit(GridBuyLimit gridBuyLimit) {
+		this.gridBuyLimit = gridBuyLimit;
+		return this.self();
+	}
+
+	/**
+	 * Sets the {@link GridBuyLimit} for this {@link DummyMeta} instance and returns
+	 * the instance itself.
+	 *
+	 * @param callback callback with {@link GridBuyLimit.Builder}
+	 * @return myself
+	 */
+	public DummyMeta withGridBuyLimit(Consumer<GridBuyLimit.Builder> callback) {
+		var b = GridBuyLimit.create();
+		callback.accept(b);
+		this.gridBuyLimit = b.build();
 		return this.self();
 	}
 
@@ -231,10 +271,5 @@ public class DummyMeta extends AbstractDummyOpenemsComponent<DummyMeta> implemen
 	public DummyMeta withThirdPartyUsageAcceptance(ThirdPartyUsageAcceptance thirdPartyUsageAcceptance) {
 		this.thirdPartyUsageAcceptance = thirdPartyUsageAcceptance;
 		return this.self();
-	}
-
-	@Override
-	public ThirdPartyUsageAcceptance getThirdPartyUsageAcceptance() {
-		return this.thirdPartyUsageAcceptance;
 	}
 }

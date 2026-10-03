@@ -2,6 +2,8 @@ package io.openems.common.session;
 
 import com.google.gson.JsonObject;
 
+import io.openems.common.utils.JsonUtils;
+
 /**
  * Represents a User; shared by OpenEMS Backend
  * ('io.openems.backend.common.metadata.User') and Edge
@@ -37,6 +39,8 @@ public abstract class AbstractUser {
 	 */
 	private final JsonObject settings;
 
+	private final boolean backendDebugEnabled;
+
 	protected AbstractUser(String id, String name, Language language, Role globalRole, JsonObject settings) {
 		this.id = id;
 		this.userId = id;
@@ -45,6 +49,7 @@ public abstract class AbstractUser {
 		this.language = language;
 		this.globalRole = globalRole;
 		this.settings = settings == null ? new JsonObject() : settings;
+		this.backendDebugEnabled = isBackendDebugModeEnabled(settings);
 	}
 
 	protected AbstractUser(String userId, String email, String name, Language language, Role globalRole,
@@ -56,6 +61,7 @@ public abstract class AbstractUser {
 		this.language = language;
 		this.globalRole = globalRole;
 		this.settings = settings == null ? new JsonObject() : settings;
+		this.backendDebugEnabled = isBackendDebugModeEnabled(settings);
 	}
 
 	public String getId() {
@@ -116,5 +122,13 @@ public abstract class AbstractUser {
 	 * @return the numberOfDevices
 	 */
 	public abstract boolean hasMultipleEdges();
+
+	public boolean isBackendDebugEnabled() {
+		return this.backendDebugEnabled;
+	}
+
+	private static boolean isBackendDebugModeEnabled(JsonObject settings) {
+		return JsonUtils.getAsOptionalBoolean(settings, "backendDebugEnabled").orElse(false);
+	}
 
 }

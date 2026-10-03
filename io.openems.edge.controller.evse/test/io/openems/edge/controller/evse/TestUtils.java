@@ -17,15 +17,17 @@ import io.openems.edge.common.test.DummyComponentManager;
 import io.openems.edge.controller.evse.cluster.ControllerEvseClusterImpl;
 import io.openems.edge.controller.evse.cluster.DistributionStrategy;
 import io.openems.edge.controller.evse.single.CombinedAbilities;
+import io.openems.edge.controller.evse.single.ControllerEvseSingle;
 import io.openems.edge.controller.evse.single.ControllerEvseSingleImpl;
+import io.openems.edge.controller.evse.single.EvseSingleState;
 import io.openems.edge.controller.evse.single.LogVerbosity;
+import io.openems.edge.controller.evse.single.Mode;
 import io.openems.edge.controller.evse.single.Params;
 import io.openems.edge.controller.evse.single.PhaseSwitching;
 import io.openems.edge.controller.evse.single.Types.History;
 import io.openems.edge.controller.evse.single.Types.Payload;
 import io.openems.edge.controller.evse.test.DummyControllerEvseSingle;
 import io.openems.edge.controller.test.ControllerTest;
-import io.openems.edge.evse.api.chargepoint.Mode;
 import io.openems.edge.evse.api.chargepoint.Profile.ChargePointAbilities;
 import io.openems.edge.evse.api.chargepoint.dummy.DummyEvseChargePoint;
 import io.openems.edge.evse.api.chargepoint.test.DummyElectricVehicle;
@@ -70,7 +72,6 @@ public class TestUtils {
 		final var test = new ControllerTest(ctrlCluster) //
 				.addReference("sum", new DummySum()) //
 				.addReference("componentManager", new DummyComponentManager(clock)) //
-				.addReference("cm", new DummyConfigurationAdmin()) //
 				.addReference("ctrls", stream(singleSuts) //
 						.map(SingleSut::ctrlSingle) //
 						.toList()); //
@@ -147,18 +148,26 @@ public class TestUtils {
 				.setSinglePhaseLimitInMilliAmpere(6000, 32000) //
 				.setThreePhaseLimitInMilliAmpere(6000, 16000); //
 
-		private String id = "ctrlEvseSingle0";
+		private String ctrlSingleId = "ctrlEvseSingle0";
+		private String chargePointId = "evseChargePoint0";
 		private Mode mode = Mode.ZERO;
 		private Integer activePower = null;
 		private int sessionEnergy = 0;
 		private Integer sessionEnergyLimit = null;
+		private Long probableNextPhaseSwitchEpochSeconds = null;
 		private History history = new History();
 		private PhaseSwitching phaseSwitching = PhaseSwitching.DISABLE;
 		private Consumer<CombinedAbilities.Builder> combinedAbilitiesCallback;
 		private JSCalendar.Tasks<Payload> tasks = JSCalendar.Tasks.empty();
+		private EvseSingleState state;
 
-		public CtrlBuilder setId(String id) {
-			this.id = id;
+		public CtrlBuilder setCtrlSingleId(String ctrlSingleId) {
+			this.ctrlSingleId = ctrlSingleId;
+			return this;
+		}
+
+		public CtrlBuilder setChargePointId(String chargePointId) {
+			this.chargePointId = chargePointId;
 			return this;
 		}
 
@@ -179,6 +188,11 @@ public class TestUtils {
 
 		public CtrlBuilder setSessionEnergyLimit(Integer sessionEnergyLimit) {
 			this.sessionEnergyLimit = sessionEnergyLimit;
+			return this;
+		}
+
+		public CtrlBuilder setProbableNextPhaseSwitchEpochSeconds(Long probableNextPhaseSwitchEpochSeconds) {
+			this.probableNextPhaseSwitchEpochSeconds = probableNextPhaseSwitchEpochSeconds;
 			return this;
 		}
 
@@ -213,16 +227,27 @@ public class TestUtils {
 			return this;
 		}
 
+		public CtrlBuilder setState(EvseSingleState state) {
+			this.state = state;
+			return this;
+		}
+
 		public DummyControllerEvseSingle build() {
 			var combinedAbilities = CombinedAbilities.createFrom(this.chargePointAbilities.build(),
 					this.electricVehicleAbilities.build());
 			if (this.combinedAbilitiesCallback != null) {
 				this.combinedAbilitiesCallback.accept(combinedAbilities);
 			}
-			var params = new Params(this.id, this.mode, this.activePower, this.sessionEnergy, this.sessionEnergyLimit,
-					this.history, this.phaseSwitching, combinedAbilities.build(), this.tasks);
-			return new DummyControllerEvseSingle(this.id) //
+			var params = new Params(this.ctrlSingleId, this.chargePointId, this.mode, this.activePower,
+					this.sessionEnergy, this.sessionEnergyLimit, this.history, this.state, this.phaseSwitching,
+					combinedAbilities.build(), this.tasks);
+			var ctrl = new DummyControllerEvseSingle(this.ctrlSingleId) //
 					.withParams(params);
+			if (this.probableNextPhaseSwitchEpochSeconds != null) {
+				ctrl.channel(ControllerEvseSingle.ChannelId.PROBABLE_NEXT_PHASE_SWITCH_EPOCH_SECONDS)
+						.setNextValue(this.probableNextPhaseSwitchEpochSeconds);
+			}
+			return ctrl;
 		}
 	}
 

@@ -31,8 +31,10 @@ import io.openems.edge.app.api.MqttApi;
 import io.openems.edge.app.api.RestJsonApiReadOnly;
 import io.openems.edge.app.api.RestJsonApiReadWrite;
 import io.openems.edge.app.api.TimedataInfluxDb;
+import io.openems.edge.app.core.AppMeta;
 import io.openems.edge.app.ess.AppSohCycle;
 import io.openems.edge.app.ess.FixActivePower;
+import io.openems.edge.app.ess.FixReactivePower;
 import io.openems.edge.app.ess.FixStateOfCharge;
 import io.openems.edge.app.ess.Limiter14a;
 import io.openems.edge.app.ess.PowerPlantController;
@@ -51,6 +53,7 @@ import io.openems.edge.app.evcs.readonly.AppHardyBarthReadOnly;
 import io.openems.edge.app.evcs.readonly.HeidelbergEvcsReadOnly;
 import io.openems.edge.app.evcs.readonly.KebaEvcsReadOnly;
 import io.openems.edge.app.evcs.readonly.MennekesEvcsReadOnly;
+import io.openems.edge.app.evse.AppAlfenEvse;
 import io.openems.edge.app.evse.AppEvseCluster;
 import io.openems.edge.app.evse.AppKebaEvse;
 import io.openems.edge.app.evse.AppMennekesEvse;
@@ -58,7 +61,9 @@ import io.openems.edge.app.evse.vehicle.AppGenericVehicle;
 import io.openems.edge.app.hardware.GpioHardwareType;
 import io.openems.edge.app.hardware.IoGpio;
 import io.openems.edge.app.hardware.KMtronic8Channel;
+import io.openems.edge.app.hardware.MasterBox2v0;
 import io.openems.edge.app.heat.AppHeatAskoma;
+import io.openems.edge.app.heat.AppHeatMyPv;
 import io.openems.edge.app.heat.CombinedHeatAndPower;
 import io.openems.edge.app.heat.HeatAskomaReadOnly;
 import io.openems.edge.app.heat.HeatMyPvReadOnly;
@@ -85,10 +90,6 @@ import io.openems.edge.app.integratedsystem.fenecon.commercial.FeneconCommercial
 import io.openems.edge.app.integratedsystem.fenecon.commercial.FeneconCommercial92;
 import io.openems.edge.app.integratedsystem.fenecon.commercial.FeneconCommercial92ClusterMaster;
 import io.openems.edge.app.integratedsystem.fenecon.commercial.FeneconCommercial92ClusterSlave;
-import io.openems.edge.app.integratedsystem.fenecon.industrial.l.Ilk710;
-import io.openems.edge.app.integratedsystem.fenecon.industrial.s.Isk010;
-import io.openems.edge.app.integratedsystem.fenecon.industrial.s.Isk011;
-import io.openems.edge.app.integratedsystem.fenecon.industrial.s.Isk110;
 import io.openems.edge.app.loadcontrol.ManualRelayControl;
 import io.openems.edge.app.loadcontrol.ThresholdControl;
 import io.openems.edge.app.meter.CarloGavazziMeter;
@@ -98,6 +99,7 @@ import io.openems.edge.app.meter.JanitzaMeter;
 import io.openems.edge.app.meter.KdkMeter;
 import io.openems.edge.app.meter.PhoenixContactMeter;
 import io.openems.edge.app.meter.PqPlusMeter;
+import io.openems.edge.app.meter.SiemensMeter;
 import io.openems.edge.app.meter.SocomecMeter;
 import io.openems.edge.app.meter.gridmeter.GridMeterGoodWe;
 import io.openems.edge.app.meter.gridmeter.GridMeterJanitza;
@@ -111,11 +113,13 @@ import io.openems.edge.app.openemshardware.TechbaseCm4;
 import io.openems.edge.app.openemshardware.TechbaseCm4Max;
 import io.openems.edge.app.openemshardware.TechbaseCm4s;
 import io.openems.edge.app.openemshardware.TechbaseCm4sGen2;
+import io.openems.edge.app.openemshardware.TechbaseCm4sGen3;
 import io.openems.edge.app.peakshaving.PeakShaving;
 import io.openems.edge.app.peakshaving.PhaseAccuratePeakShaving;
 import io.openems.edge.app.peakshaving.TimeSlotPeakShaving;
 import io.openems.edge.app.prediction.AppPredictionDefault;
 import io.openems.edge.app.prediction.AppPredictionUnmanagedConsumption;
+import io.openems.edge.app.prediction.AppWeatherPrediction;
 import io.openems.edge.app.pvinverter.FroniusPvInverter;
 import io.openems.edge.app.pvinverter.KacoPvInverter;
 import io.openems.edge.app.pvinverter.KostalPvInverter;
@@ -271,46 +275,6 @@ public final class Apps {
 	 */
 	public static final FeneconCommercial92ClusterSlave feneconCommercial92ClusterSlave(AppManagerTestBundle t) {
 		return app(t, FeneconCommercial92ClusterSlave::new, "App.FENECON.Commercial.92.ClusterSlave");
-	}
-
-	/**
-	 * Test method for creating a {@link Ilk710}.
-	 * 
-	 * @param t the {@link AppManagerTestBundle}
-	 * @return the {@link OpenemsApp} instance
-	 */
-	public static final Ilk710 feneconIndustrialLIlk710(AppManagerTestBundle t) {
-		return app(t, Ilk710::new, "App.FENECON.Industrial.L.ILK710");
-	}
-
-	/**
-	 * Test method for creating a {@link Isk110}.
-	 * 
-	 * @param t the {@link AppManagerTestBundle}
-	 * @return the {@link OpenemsApp} instance
-	 */
-	public static final Isk110 feneconIndustrialSIsk110(AppManagerTestBundle t) {
-		return app(t, Isk110::new, "App.FENECON.Industrial.S.ISK110");
-	}
-
-	/**
-	 * Test method for creating a {@link Isk010}.
-	 * 
-	 * @param t the {@link AppManagerTestBundle}
-	 * @return the {@link OpenemsApp} instance
-	 */
-	public static final Isk010 feneconIndustrialSIsk010(AppManagerTestBundle t) {
-		return app(t, Isk010::new, "App.FENECON.Industrial.S.ISK010");
-	}
-
-	/**
-	 * Test method for creating a {@link Isk011}.
-	 * 
-	 * @param t the {@link AppManagerTestBundle}
-	 * @return the {@link OpenemsApp} instance
-	 */
-	public static final Isk011 feneconIndustrialSIsk011(AppManagerTestBundle t) {
-		return app(t, Isk011::new, "App.FENECON.Industrial.S.ISK011");
 	}
 
 	/**
@@ -566,6 +530,16 @@ public final class Apps {
 	}
 
 	/**
+	 * Test method for creating a {@link TechbaseCm4sGen3}.
+	 *
+	 * @param t the {@link AppManagerTestBundle}
+	 * @return the {@link OpenemsApp} instance
+	 */
+	public static final TechbaseCm4sGen3 techbaseCm4sGen3(AppManagerTestBundle t) {
+		return app(t, TechbaseCm4sGen3::new, "App.OpenemsHardware.CM4S.Gen3");
+	}
+
+	/**
 	 * Test method for creating a {@link TestPermissions}.
 	 * 
 	 * @param t the {@link AppManagerTestBundle}
@@ -757,6 +731,18 @@ public final class Apps {
 		return app(t, RestJsonApiReadWrite::new, "App.Api.RestJson.ReadWrite");
 	}
 
+	// core
+
+	/**
+	 * Test method for creating a {@link AppMeta}.
+	 *
+	 * @param t the {@link AppManagerTestBundle}
+	 * @return the {@link OpenemsApp} instance
+	 */
+	public static OpenemsApp meta(AppManagerTestBundle t) {
+		return app(t, AppMeta::new, "App.Core.Meta");
+	}
+
 	// Evcs
 
 	/**
@@ -837,6 +823,16 @@ public final class Apps {
 	 */
 	public static final AppMennekesEvse mennekesEvse(AppManagerTestBundle t) {
 		return app(t, AppMennekesEvse::new, AppMennekesEvse.APP_EVSE_MENNEKES);
+	}
+
+	/**
+	 * Test method for creating a {@link AppAlfenEvse}.
+	 *
+	 * @param t the {@link AppManagerTestBundle}
+	 * @return the {@link OpenemsApp} instance
+	 */
+	public static final AppAlfenEvse alfenEvse(AppManagerTestBundle t) {
+		return app(t, AppAlfenEvse::new, AppAlfenEvse.APP_EVSE_ALFEN);
 	}
 
 	/**
@@ -971,6 +967,16 @@ public final class Apps {
 		return app(t, IoGpio::new, "App.Hardware.IoGpio");
 	}
 
+	/**
+	 * Test method for creating a {@link MasterBox2v0}.
+	 * 
+	 * @param t the {@link AppManagerTestBundle}
+	 * @return the {@link OpenemsApp} instance
+	 */
+	public static final MasterBox2v0 masterBox2v0(AppManagerTestBundle t) {
+		return app(t, MasterBox2v0::new, "App.Hardware.MasterBox2v0");
+	}
+
 	// Heat
 
 	/**
@@ -1096,7 +1102,17 @@ public final class Apps {
 	 * @return the {@link OpenemsApp} instance
 	 */
 	public static final SocomecMeter socomecMeter(AppManagerTestBundle t) {
-		return app(t, SocomecMeter::new, "App.Meter.Socomec");
+		return app(t, SocomecMeter::new, SocomecMeter.APP_METER_SOCOMEC);
+	}
+
+	/**
+	 * Test method for creating a {@link SiemensMeter}.
+	 *
+	 * @param t the {@link AppManagerTestBundle}
+	 * @return the {@link OpenemsApp} instance
+	 */
+	public static final SiemensMeter siemensMeter(AppManagerTestBundle t) {
+		return app(t, SiemensMeter::new, "App.Meter.Siemens");
 	}
 
 	/**
@@ -1286,6 +1302,16 @@ public final class Apps {
 	}
 
 	/**
+	 * Test method for creating a {@link FixReactivePower}.
+	 *
+	 * @param t the {@link AppManagerTestBundle}
+	 * @return the {@link OpenemsApp} instance
+	 */
+	public static final FixReactivePower fixReactivePower(AppManagerTestBundle t) {
+		return app(t, FixReactivePower::new, "App.Ess.FixReactivePower");
+	}
+
+	/**
 	 * Test method for creating a {@link FixStateOfCharge}.
 	 * 
 	 * @param t the {@link AppManagerTestBundle}
@@ -1346,6 +1372,16 @@ public final class Apps {
 	}
 
 	/**
+	 * Test method for creating a {@link AppHeatMyPv}.
+	 *
+	 * @param t the {@link AppManagerTestBundle}
+	 * @return the {@link OpenemsApp} instance
+	 */
+	public static final AppHeatMyPv heatMyPv(AppManagerTestBundle t) {
+		return app(t, AppHeatMyPv::new, "App.Heat.MyPv");
+	}
+
+	/**
 	 * Test method for creating a {@link HeatAskomaReadOnly}.
 	 *
 	 * @param t the {@link AppManagerTestBundle}
@@ -1383,6 +1419,16 @@ public final class Apps {
 	 */
 	public static final AppPredictionUnmanagedConsumption predictionUnmanagedConsumption(AppManagerTestBundle t) {
 		return app(t, AppPredictionUnmanagedConsumption::new, "App.Prediction.UnmanagedConsumption");
+	}
+
+	/**
+	 * Test method for creating a {@link AppWeatherPrediction}.
+	 *
+	 * @param t the {@link AppManagerTestBundle}
+	 * @return the {@link OpenemsApp} instance
+	 */
+	public static final AppWeatherPrediction weatherPrediction(AppManagerTestBundle t) {
+		return app(t, AppWeatherPrediction::new, "App.Prediction.Weather");
 	}
 
 	/**

@@ -1,6 +1,6 @@
 package io.openems.edge.system.fenecon.masterbox2v0;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import io.openems.common.channel.Level;
 import io.openems.common.test.DummyConfigurationAdmin;
@@ -102,8 +102,8 @@ public class MasterBox2v0ImplTest {
 						.output(MasterBox2v0.ChannelId.HW_SPI_ENERGY_ENABLE, false) //
 						.output(MasterBox2v0.ChannelId.HW_CAN_TOWER_ENABLE, false) //
 						.output(MasterBox2v0.ChannelId.GRID_STATE, GridState.POWER_SUPPLY) //
-						.output(MasterBox2v0.ChannelId.TEMPERATURE, 40.0) //
-						.output(MasterBox2v0.ChannelId.HUMIDITY, 16.0) //
+						.output(MasterBox2v0.ChannelId.TEMPERATURE, 400) //
+						.output(MasterBox2v0.ChannelId.HUMIDITY, 160) //
 						.output(MasterBox2v0.ChannelId.TIME_STAMP_ENERGYMETER, 100000L) //
 						.output(MasterBox2v0.ChannelId.STATUS_ENERGYMETER, StateEnergyMeter.NO_ERROR) //
 				);

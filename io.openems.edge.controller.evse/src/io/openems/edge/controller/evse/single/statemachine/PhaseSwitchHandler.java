@@ -11,48 +11,55 @@ import java.util.function.BooleanSupplier;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.utils.EnumUtils;
 import io.openems.edge.common.statemachine.StateHandler;
-import io.openems.edge.controller.evse.single.statemachine.StateMachine.State;
-import io.openems.edge.evse.api.chargepoint.Profile;
+import io.openems.edge.controller.evse.single.EvseSingleState;
+import io.openems.edge.evse.api.common.ApplyPhaseSwitch;
+import io.openems.edge.evse.api.common.ApplyPhaseSwitch.PhaseSwitchAbility;
+import io.openems.edge.evse.api.common.ApplyPhaseSwitch.PhaseSwitchAbility.Internal;
+import io.openems.edge.evse.api.common.ApplyPhaseSwitch.PhaseSwitchAbility.ManualWithoutZeroSetPoint;
 
-public abstract sealed class PhaseSwitchHandler extends StateHandler<State, Context> {
+public abstract sealed class PhaseSwitchHandler extends StateHandler<EvseSingleState, Context> {
 
 	public static final class ToSinglePhase extends PhaseSwitchHandler {
 		public ToSinglePhase() {
-			super(Profile.PhaseSwitch.TO_SINGLE_PHASE);
+			super();
 		}
 	}
 
 	public static final class ToThreePhase extends PhaseSwitchHandler {
 		public ToThreePhase() {
-			super(Profile.PhaseSwitch.TO_THREE_PHASE);
+			super();
 		}
 	}
 
-	private final Profile.PhaseSwitch action;
-	private final State state;
+	private ApplyPhaseSwitch action;
+	private EvseSingleState state;
 
 	private SubStateMachine subStateMachine;
 
-	protected PhaseSwitchHandler(Profile.PhaseSwitch action) {
+	protected PhaseSwitchHandler() {
 		this.subStateMachine = new SubStateMachine();
-		this.action = action;
-		this.state = switch (this.action) {
-		case TO_SINGLE_PHASE -> State.PHASE_SWITCH_TO_SINGLE_PHASE;
-		case TO_THREE_PHASE -> State.PHASE_SWITCH_TO_THREE_PHASE;
-		};
 	}
 
 	@Override
 	protected void onEntry(Context context) throws OpenemsNamedException {
-		this.subStateMachine.setNextSubState(SubStateMachine.State.STOP_CHARGE, context);
-		context.setPhaseSwitchFailed.accept(false); // Reset StateChannel
+		this.action = context.actions.phaseSwitch();
+		this.state = this.mapPhaseSwitchDirection();
+		this.subStateMachine.setNextSubState(SubStateMachine.State.ENTRY, context);
+		context.setPhaseSwitchFailed.accept(false);
+	}
+
+	private EvseSingleState mapPhaseSwitchDirection() {
+		return switch (this.action.direction()) {
+		case TO_SINGLE_PHASE -> EvseSingleState.PHASE_SWITCH_TO_SINGLE_PHASE;
+		case TO_THREE_PHASE -> EvseSingleState.PHASE_SWITCH_TO_THREE_PHASE;
+		};
 	}
 
 	@Override
-	protected State runAndGetNextState(Context context) throws OpenemsNamedException {
+	protected EvseSingleState runAndGetNextState(Context context) throws OpenemsNamedException {
 		final var nextSubState = this.getNextSubState(context);
 		if (nextSubState == SubStateMachine.State.FINISHED) {
-			return State.CHARGING;
+			return EvseSingleState.CHARGING;
 		}
 		this.subStateMachine.setNextSubState(nextSubState, context);
 		return this.state;
@@ -63,89 +70,154 @@ public abstract sealed class PhaseSwitchHandler extends StateHandler<State, Cont
 		return this.state.asCamelCase() + this.subStateMachine.debugLog;
 	}
 
-	private SubStateMachine.State getNextSubState(Context context) throws OpenemsNamedException {
+	private SubStateMachine.State getNextSubState(Context context) {
 		return switch (this.subStateMachine.activeState) {
-		/*
-		 * Initially stop charging.
-		 */
-		case STOP_CHARGE -> {
-			yield switch (this.subStateMachine.getPhase(context,
-					// Predicate tests if EV is charging
-					() -> context.chargePoint.getActivePower().orElse(MAX_VALUE) < 100)) {
-			case DEAD_TIME, PREDICATE_FALSE -> {
-				// Keep stopping charging by applying zero set-point
-				context.applyAdjustedActions(b -> b //
-						.setApplyZeroSetPoint() //
-						.setPhaseSwitch(null));
-				yield SubStateMachine.State.STOP_CHARGE;
-			}
-			case PREDICATE_TRUE -> {
-				// No Charge-Power anymore -> start PhaseSwitch
-				yield SubStateMachine.State.PHASE_SWITCH;
-			}
-			case TIMEOUT_PASSED -> {
-				yield SubStateMachine.State.FINISHED;
-			}
-			};
-		}
+		case ENTRY -> this.handleEntry(context);
+		case ENSURE_CHARGE -> this.handleEnsureCharge(context);
+		case STOP_CHARGE -> this.handleStopCharge(context);
+		case PHASE_SWITCH_INTERNAL -> this.handlePhaseSwitchInternal(context);
+		case PHASE_SWITCH_MANUAL -> this.handlePhaseSwitchManual(context);
+		case PHASE_SWITCH_MANUAL_WITHOUT_ZERO -> this.handlePhaseSwitchManualWithoutZero(context);
+		case START_CHARGE -> this.handleStartCharge(context);
+		case FINISHED -> SubStateMachine.State.FINISHED;
+		};
+	}
 
-		/*
-		 * Apply actual phase-switch
-		 */
-		case PHASE_SWITCH -> {
-			yield switch (this.subStateMachine.getPhase(context, () -> {
-				// Predicate tests if phase-switch completed
-				final var activePhase = context.actions.abilities().applySetPoint().phase();
-				final var targetPhase = switch (this.action) {
-				case TO_SINGLE_PHASE -> SINGLE_PHASE;
-				case TO_THREE_PHASE -> THREE_PHASE;
-				};
-				return activePhase == targetPhase;
-			})) {
-			case DEAD_TIME, PREDICATE_FALSE -> {
-				// Actually apply phase-switch action in ChargePoint; still with zero set-point
-				if (context.actions.abilities().phaseSwitch() == this.action) {
-					// While specific PhaseSwitch-Action is available
-					context.applyAdjustedActions(b -> b //
-							.setApplyZeroSetPoint() //
-							.setPhaseSwitch(this.action));
-				} else {
-					context.applyAdjustedActions(b -> b //
-							.setApplyZeroSetPoint());
-				}
-				yield SubStateMachine.State.PHASE_SWITCH;
-			}
-			case PREDICATE_TRUE -> {
-				// PhaseSwitch completed -> re-start charging
-				yield SubStateMachine.State.START_CHARGE;
-			}
-			case TIMEOUT_PASSED -> {
-				yield SubStateMachine.State.FINISHED;
-			}
-			};
+	private SubStateMachine.State handleEntry(Context context) {
+		return switch (this.action.ability()) {
+		case Internal ignored -> {
+			final var targetPhase = this.getTargetPhase();
+			final var phaseSwitch = context.actions.abilities().phaseSwitch() != null
+					&& context.actions.abilities().phaseSwitch().direction() == this.action.direction() //
+							? this.action //
+							: null;
+			context.applyAdjustedActions(b -> b //
+					.setPhaseSwitch(phaseSwitch) //
+					.setApplyInternalPhaseSwitchPower(targetPhase.count));
+			yield SubStateMachine.State.PHASE_SWITCH_INTERNAL;
 		}
+		case ManualWithoutZeroSetPoint ignored -> SubStateMachine.State.ENSURE_CHARGE;
+		case null, default -> SubStateMachine.State.STOP_CHARGE;
+		};
+	}
 
-		/*
-		 * Finished phase-switch; re-start charging
-		 */
-		case START_CHARGE -> {
-			yield switch (this.subStateMachine.getPhase(context)) {
-			case DEAD_TIME, PREDICATE_FALSE -> {
-				// Allow Charge with Min-Set-Point (but EV might not be connected)
-				context.applyAdjustedActions(b -> b //
-						.setApplyMinSetPoint() //
-						.setPhaseSwitch(null));
-				yield SubStateMachine.State.START_CHARGE;
+	private void applyEnsureChargeActions(Context context) {
+		context.applyAdjustedActions(b -> b //
+				.setApplyMinSetPoint() //
+				.setPhaseSwitch(null));
+	}
+
+	private void applyManualPhaseSwitchActions(Context context, ApplyPhaseSwitch phaseSwitch) {
+		context.applyAdjustedActions(b -> {
+			if (this.action.ability() instanceof PhaseSwitchAbility.Manual) {
+				b.setApplyZeroSetPoint();
 			}
-			case PREDICATE_TRUE, TIMEOUT_PASSED -> {
-				yield SubStateMachine.State.FINISHED;
-			}
-			};
+			b.setPhaseSwitch(phaseSwitch);
+		});
+	}
+
+	private SubStateMachine.State handleEnsureCharge(Context context) {
+		return switch (this.subStateMachine.getPhase(context,
+				() -> context.chargePoint.getActivePower().orElse(0) > 100)) {
+		case DEAD_TIME, PREDICATE_FALSE -> {
+			this.applyEnsureChargeActions(context);
+			yield SubStateMachine.State.ENSURE_CHARGE;
 		}
+		case PREDICATE_TRUE -> SubStateMachine.State.PHASE_SWITCH_MANUAL_WITHOUT_ZERO;
+		case TIMEOUT_PASSED -> SubStateMachine.State.FINISHED;
+		};
+	}
 
-		case FINISHED -> {
+	private SubStateMachine.State handleStopCharge(Context context) {
+		return switch (this.subStateMachine.getPhase(context,
+				() -> context.chargePoint.getActivePower().orElse(MAX_VALUE) < 100)) {
+		case DEAD_TIME, PREDICATE_FALSE -> {
+			this.applyManualPhaseSwitchActions(context, null);
+			yield SubStateMachine.State.STOP_CHARGE;
+		}
+		case PREDICATE_TRUE -> SubStateMachine.State.PHASE_SWITCH_MANUAL;
+		case TIMEOUT_PASSED -> SubStateMachine.State.FINISHED;
+		};
+	}
+
+	private io.openems.edge.common.type.Phase.SingleOrThreePhase getTargetPhase() {
+		return switch (this.action.direction()) {
+		case TO_SINGLE_PHASE -> SINGLE_PHASE;
+		case TO_THREE_PHASE -> THREE_PHASE;
+		};
+	}
+
+	private boolean isPhaseSwitchCompleted(Context context) {
+		return context.actions.abilities().applySetPoint().phase() == this.getTargetPhase();
+	}
+
+	private boolean isInternalPhaseSwitchCompleted(Context context) {
+		return this.isPhaseSwitchCompleted(context);
+	}
+
+	private SubStateMachine.State handlePhaseSwitchInternal(Context context) {
+		return switch (this.subStateMachine.getPhase(context, () -> this.isInternalPhaseSwitchCompleted(context))) {
+		case DEAD_TIME, PREDICATE_FALSE -> {
+			final var targetPhase = this.getTargetPhase();
+			final var phaseSwitch = context.actions.abilities().phaseSwitch() != null
+					&& context.actions.abilities().phaseSwitch().direction() == this.action.direction() //
+							? this.action //
+							: null;
+			context.applyAdjustedActions(b -> b //
+					.setPhaseSwitch(phaseSwitch) //
+					.setApplyInternalPhaseSwitchPower(targetPhase.count));
+			yield SubStateMachine.State.PHASE_SWITCH_INTERNAL;
+		}
+		case PREDICATE_TRUE, TIMEOUT_PASSED -> SubStateMachine.State.FINISHED;
+		};
+	}
+
+	private SubStateMachine.State handlePhaseSwitchManual(Context context) {
+		return switch (this.subStateMachine.getPhase(context, () -> this.isPhaseSwitchCompleted(context))) {
+		case DEAD_TIME, PREDICATE_FALSE -> {
+			if (context.actions.abilities().phaseSwitch() != null
+					&& context.actions.abilities().phaseSwitch().direction() == this.action.direction()) {
+				this.applyManualPhaseSwitchActions(context, this.action);
+			} else {
+				this.applyManualPhaseSwitchActions(context, null);
+			}
+			yield SubStateMachine.State.PHASE_SWITCH_MANUAL;
+		}
+		case PREDICATE_TRUE -> SubStateMachine.State.START_CHARGE;
+		case TIMEOUT_PASSED -> SubStateMachine.State.FINISHED;
+		};
+	}
+
+	private SubStateMachine.State handlePhaseSwitchManualWithoutZero(Context context) {
+		return switch (this.subStateMachine.getPhaseWithoutDeadTime(context,
+				() -> this.isPhaseSwitchCompleted(context))) {
+		case PREDICATE_FALSE -> {
+			if (context.actions.abilities().phaseSwitch() != null
+					&& context.actions.abilities().phaseSwitch().direction() == this.action.direction()) {
+				this.applyManualPhaseSwitchActions(context, this.action);
+			} else {
+				this.applyManualPhaseSwitchActions(context, null);
+			}
+			yield SubStateMachine.State.PHASE_SWITCH_MANUAL_WITHOUT_ZERO;
+		}
+		case PREDICATE_TRUE, TIMEOUT_PASSED -> {
+			context.applyAdjustedActions(b -> b.setPhaseSwitch(null));
 			yield SubStateMachine.State.FINISHED;
 		}
+		case DEAD_TIME -> throw new IllegalStateException("Dead-time is not used for ManualWithoutZeroSetPoint.");
+		};
+	}
+
+	private SubStateMachine.State handleStartCharge(Context context) {
+		return switch (this.subStateMachine.getPhase(context)) {
+		case DEAD_TIME, PREDICATE_FALSE -> {
+			context.applyAdjustedActions(b -> b //
+					.setApplyMinSetPoint() //
+					.setPhaseSwitch(null));
+			yield SubStateMachine.State.START_CHARGE;
+		}
+		case PREDICATE_TRUE, TIMEOUT_PASSED -> SubStateMachine.State.FINISHED;
+
 		};
 	}
 
@@ -196,18 +268,43 @@ public abstract sealed class PhaseSwitchHandler extends StateHandler<State, Cont
 			return result;
 		}
 
+		public Phase getPhaseWithoutDeadTime(Context context, BooleanSupplier predicate) {
+			if (this.lastChange == null) { // handle race condition
+				this.lastChange = Instant.now(context.clock);
+			}
+
+			final var duration = Duration.between(this.lastChange, Instant.now(context.clock)).toSeconds();
+			final Phase result;
+			if (duration >= TIMEOUT_SECONDS) {
+				context.setPhaseSwitchFailed.accept(true); // Phase-Switch failed
+				result = Phase.TIMEOUT_PASSED;
+			} else if (predicate.getAsBoolean()) {
+				result = Phase.PREDICATE_TRUE;
+			} else {
+				result = Phase.PREDICATE_FALSE;
+			}
+			this.debugLog = "-" + EnumUtils.nameAsCamelCase(this.activeState) //
+					+ "-" + EnumUtils.nameAsCamelCase(result) //
+					+ "-" + duration + "s";
+			return result;
+		}
+
 		private enum State {
-			STOP_CHARGE, // Stop Charge
-			PHASE_SWITCH, // Execute Phase-Switch
-			START_CHARGE, // Start Charge
-			FINISHED, // FINISHED
+			ENTRY, //
+			ENSURE_CHARGE, //
+			STOP_CHARGE, //
+			PHASE_SWITCH_MANUAL, //
+			PHASE_SWITCH_MANUAL_WITHOUT_ZERO, //
+			PHASE_SWITCH_INTERNAL, //
+			START_CHARGE, //
+			FINISHED, //
 		}
 
 		private enum Phase {
-			DEAD_TIME, // Dead-Time is active: minimum time to wait for applied actions
-			PREDICATE_FALSE, // Dead-Time has passed and Predicate is true
-			PREDICATE_TRUE, // Dead-Time has passed and Predicate is false
-			TIMEOUT_PASSED // Timeout reached
+			DEAD_TIME, //
+			PREDICATE_FALSE, //
+			PREDICATE_TRUE, //
+			TIMEOUT_PASSED //
 		}
 	}
 

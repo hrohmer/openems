@@ -33,9 +33,12 @@ import org.slf4j.LoggerFactory;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import io.openems.backend.authentication.api.AuthUserPasswordAuthenticationService;
+import io.openems.backend.authentication.api.model.PasswordAuthenticationResult;
 import io.openems.backend.common.alerting.OfflineEdgeAlertingSetting;
 import io.openems.backend.common.alerting.SumStateAlertingSetting;
 import io.openems.backend.common.alerting.UserAlertingSettings;
+import io.openems.backend.common.edge.jsonrpc.UpdateMetadataCache;
 import io.openems.backend.common.metadata.AbstractMetadata;
 import io.openems.backend.common.metadata.Edge;
 import io.openems.backend.common.metadata.EdgeHandler;
@@ -83,7 +86,7 @@ import io.openems.common.utils.JsonUtils;
 @EventTopics({ //
 		Edge.Events.ON_SET_CONFIG //
 })
-public class MetadataFile extends AbstractMetadata implements Metadata, EventHandler {
+public class MetadataFile extends AbstractMetadata implements Metadata, EventHandler, AuthUserPasswordAuthenticationService {
 
 	private static final String USER_ID = "admin";
 	private static final String USER_NAME = "Administrator";
@@ -163,9 +166,35 @@ public class MetadataFile extends AbstractMetadata implements Metadata, EventHan
 	}
 
 	@Override
+	public CompletableFuture<PasswordAuthenticationResult> authenticateWithPassword(String username, String password) {
+		return CompletableFuture
+				.completedFuture(new PasswordAuthenticationResult(this.user.getId(), this.user.getName(),
+						UUID.randomUUID().toString()));
+	}
+
+	@Override
+	public CompletableFuture<PasswordAuthenticationResult> authenticateWithToken(String token) {
+		return CompletableFuture
+				.completedFuture(new PasswordAuthenticationResult(this.user.getId(), this.user.getName(), token));
+	}
+
+	@Override
+	public CompletableFuture<Void> logout(String token) {
+		return CompletableFuture.completedFuture(null);
+	}
+
+	@Override
 	public synchronized Collection<Edge> getAllOfflineEdges() {
 		this.refreshData();
 		return this.edges.values().stream().filter(Edge::isOffline).collect(Collectors.toUnmodifiableList());
+	}
+
+	@Override
+	public synchronized UpdateMetadataCache.Notification generateUpdateMetadataCacheNotification() {
+		this.refreshData();
+		var apikeysToEdgeIds = this.edges.values().stream() //
+				.collect(Collectors.toMap(MyEdge::getApikey, MyEdge::getId));
+		return new UpdateMetadataCache.Notification(apikeysToEdgeIds);
 	}
 
 	private synchronized void refreshData() {

@@ -4,7 +4,7 @@ ARG JAVA_PACKAGE=jre
 ### Build edge binary
 FROM --platform=$BUILDPLATFORM eclipse-temurin:${JAVA_VERSION}-jdk-alpine AS build_edge
 
-RUN apk add --no-cache dos2unix bash
+RUN apk add --no-cache dos2unix bash gcompat
 
 COPY tools/docker/edge/root/ /opt/root/
 

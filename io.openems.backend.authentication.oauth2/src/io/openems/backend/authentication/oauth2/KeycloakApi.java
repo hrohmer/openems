@@ -47,23 +47,32 @@ public final class KeycloakApi {
 	}
 
 	/**
-	 * Gets a token from Keycloak using the password grant type.
-	 * 
+	 * Gets a token using the password grant type (Resource Owner Password).
+	 *
+	 * <p>
+	 * Takes the token endpoint directly instead of deriving it from the issuer
+	 * URL. Only Keycloak exposes its token endpoint at
+	 * {@code <issuer>/protocol/openid-connect/token}; other OpenID providers use
+	 * a different path (Auth0, for example, uses {@code /oauth/token}), which
+	 * made this method usable with Keycloak only. The token endpoint is already
+	 * configurable as {@code Authentication.OAuth}'s {@code tokenUrl} — it was
+	 * simply not used here.
+	 *
 	 * @param bridgeHttp   the {@link BridgeHttp} instance to use for the HTTP
-	 * @param issuerUrl    the issuer URL of the Keycloak server
-	 * @param clientId     the client ID registered in Keycloak
-	 * @param clientSecret the client secret registered in Keycloak
+	 * @param tokenUrl     the token endpoint of the OpenID provider
+	 * @param clientId     the client ID registered at the provider
+	 * @param clientSecret the client secret registered at the provider
 	 * @param username     the username of the user
 	 * @param password     the password of the user
 	 * @return a {@link CompletableFuture} that completes with the access token as a
 	 *         String
 	 */
 	public static CompletableFuture<String> getToken(//
-			BridgeHttp bridgeHttp, String issuerUrl, //
+			BridgeHttp bridgeHttp, String tokenUrl, //
 			String clientId, String clientSecret, //
 			String username, String password //
 	) {
-		return bridgeHttp.requestJson(BridgeHttp.Endpoint.create(issuerUrl + "/protocol/openid-connect/token") //
+		return bridgeHttp.requestJson(BridgeHttp.Endpoint.create(tokenUrl) //
 				.setBodyFormEncoded(Map.of(//
 						"grant_type", "password", //
 						"client_id", clientId, //

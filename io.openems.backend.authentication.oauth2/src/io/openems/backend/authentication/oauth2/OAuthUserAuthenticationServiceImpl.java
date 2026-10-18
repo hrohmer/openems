@@ -199,7 +199,9 @@ public class OAuthUserAuthenticationServiceImpl implements AuthUserRegistrationS
 	@Override
 	public CompletableFuture<PasswordAuthenticationResult> authenticateWithPassword(String username, String password) {
 		final var config = this.getServiceAccountOemConfig();
-		return KeycloakApi.getToken(this.bridgeHttp, this.issuerUrl.toString(), config.clientId(),
+		// Use the configured token endpoint rather than deriving Keycloak's
+		// <issuer>/protocol/openid-connect/token, so any OpenID provider works.
+		return KeycloakApi.getToken(this.bridgeHttp, this.tokenUrl.toString(), config.clientId(),
 				config.clientSecret(), username, password).thenApply(token -> {
 					final var jwtToken = JWT.decode(token);
 					final var email = jwtToken.getClaim("email").asString();

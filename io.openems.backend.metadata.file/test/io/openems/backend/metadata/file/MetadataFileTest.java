@@ -1,7 +1,6 @@
 package io.openems.backend.metadata.file;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -53,33 +52,6 @@ public class MetadataFileTest {
 		assertEquals(//
 				Map.of("apikeyA", "edge0", "apikeyB", "edge1"), //
 				notification.getApikeysToEdgeIds());
-	}
-
-	@Test
-	public void authenticateWithPassword_succeedsWithAnyCredentials() throws Exception {
-		var metadataFile = new MetadataFile();
-
-		var result = metadataFile.authenticateWithPassword("someone", "irrelevant").get();
-
-		assertNotNull(result.token());
-		assertNotNull(metadataFile.getUserByExternalId(result.userId()).get());
-	}
-
-	@Test
-	public void authenticateWithToken_succeedsWithAnyToken() throws Exception {
-		var metadataFile = new MetadataFile();
-
-		var result = metadataFile.authenticateWithToken("some-token").get();
-
-		assertEquals("some-token", result.token());
-		assertNotNull(metadataFile.getUserByExternalId(result.userId()).get());
-	}
-
-	@Test
-	public void logout_completesWithoutError() throws Exception {
-		var metadataFile = new MetadataFile();
-
-		metadataFile.logout("some-token").get();
 	}
 
 }

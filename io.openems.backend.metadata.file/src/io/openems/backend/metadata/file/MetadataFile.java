@@ -33,8 +33,6 @@ import org.slf4j.LoggerFactory;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
-import io.openems.backend.authentication.api.AuthUserPasswordAuthenticationService;
-import io.openems.backend.authentication.api.model.PasswordAuthenticationResult;
 import io.openems.backend.common.alerting.OfflineEdgeAlertingSetting;
 import io.openems.backend.common.alerting.SumStateAlertingSetting;
 import io.openems.backend.common.alerting.UserAlertingSettings;
@@ -86,7 +84,7 @@ import io.openems.common.utils.JsonUtils;
 @EventTopics({ //
 		Edge.Events.ON_SET_CONFIG //
 })
-public class MetadataFile extends AbstractMetadata implements Metadata, EventHandler, AuthUserPasswordAuthenticationService {
+public class MetadataFile extends AbstractMetadata implements Metadata, EventHandler {
 
 	private static final String USER_ID = "admin";
 	private static final String USER_NAME = "Administrator";
@@ -165,23 +163,13 @@ public class MetadataFile extends AbstractMetadata implements Metadata, EventHan
 		return Optional.of(this.user);
 	}
 
-	@Override
-	public CompletableFuture<PasswordAuthenticationResult> authenticateWithPassword(String username, String password) {
-		return CompletableFuture
-				.completedFuture(new PasswordAuthenticationResult(this.user.getId(), this.user.getName(),
-						UUID.randomUUID().toString()));
-	}
-
-	@Override
-	public CompletableFuture<PasswordAuthenticationResult> authenticateWithToken(String token) {
-		return CompletableFuture
-				.completedFuture(new PasswordAuthenticationResult(this.user.getId(), this.user.getName(), token));
-	}
-
-	@Override
-	public CompletableFuture<Void> logout(String token) {
-		return CompletableFuture.completedFuture(null);
-	}
+	// NOTE: deliberately does NOT implement AuthUserPasswordAuthenticationService.
+	// That service is provided by the Authentication.OAuth component, which
+	// validates credentials against the configured OpenID provider. An
+	// always-succeed implementation here would register a second service of the
+	// same type; Ui.Websocket binds it with a GREEDY/DYNAMIC reference, so it
+	// could bind this one instead and accept any password — silently bypassing
+	// the identity provider.
 
 	@Override
 	public synchronized Collection<Edge> getAllOfflineEdges() {

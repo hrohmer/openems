@@ -105,6 +105,9 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 	}
 
 	private void setPrices(MarketPriceData marketPriceData) {
+		setValue(this, TariffEntsoeGridSell.ChannelId.CURRENT_PRICE, marketPriceData == null ? null
+				: marketPriceData.getValues().getAt(Instant.now(this.componentManager.getClock())));
+
 		if (marketPriceData == null) {
 			this.prices.set(null);
 			return;

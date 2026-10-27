@@ -69,7 +69,7 @@ public class TariffEntsoeGridSellTest {
 						.setId("tariffGridSell0") //
 						.setSecurityToken("Unit-Test") //
 						.setBiddingZone(EntsoeBiddingZone.GERMANY) //
-						.setCalculateExpression("") //
+						.setCalculateExpression("x*0.9") //
 						.build())
 
 				.next(new TestCase("Current price channel reflects raw spot price at fetch time") //

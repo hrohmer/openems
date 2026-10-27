@@ -159,6 +159,9 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 	}
 
 	protected void setPrices(MarketPriceData marketPriceData) {
+		setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE, marketPriceData == null ? null
+				: marketPriceData.getValues().getAt(Instant.now(this.componentManager.getClock())));
+
 		if (marketPriceData == null) {
 			this.prices.set(null);
 			return;

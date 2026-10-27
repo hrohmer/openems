@@ -173,6 +173,42 @@ public class TouEntsoeTest {
 	}
 
 	@Test
+	public void testCurrentPriceChannel() throws Exception {
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
+		final var clock = new TimeLeapClock(Instant.parse("2026-02-02T00:00:00Z"));
+		final var entsoe = new TouEntsoeImpl();
+		var dummyMeta = new DummyMeta() //
+				.withCurrency(EUR);
+
+		var pool = this.createPool(httpTestBundle.factory());
+
+		new ComponentTest(entsoe) //
+				.addReference("meta", dummyMeta) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("entsoeMarketPriceProviderPool", pool) //
+				.activate(MyConfig.create() //
+						.setId("tou0") //
+						.setSecurityToken("Unit-Test") //
+						.setBiddingZone(EntsoeBiddingZone.GERMANY) //
+						.setAncillaryCosts(buildJsonObject() //
+								.addProperty("dso", "BAYERNWERK") //
+								.build() //
+								.toString()) //
+						.setCalculateExpression("") //
+						.build())
+
+				.next(new TestCase("Current price channel reflects raw spot price at fetch time") //
+						.onBeforeProcessImage(() -> {
+							var testResponse = this.getTestEntsoeResponse();
+							httpTestBundle.forceNextSuccessfulResult(HttpResponse.ok(testResponse));
+							httpTestBundle.runTasksImmediately();
+						}) //
+						.output(TouEntsoe.ChannelId.CURRENT_PRICE, 99.41) //
+				) //
+		;
+	}
+
+	@Test
 	public void testAllDsoSchedules() {
 		for (final var dso : GermanDSO.values()) {
 			final var gridFee = dso.gridFee;

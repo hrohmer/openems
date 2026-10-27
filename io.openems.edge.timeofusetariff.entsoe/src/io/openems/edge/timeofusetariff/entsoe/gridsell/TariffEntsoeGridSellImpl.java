@@ -105,16 +105,14 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 	}
 
 	private void setPrices(MarketPriceData marketPriceData) {
-		setValue(this, TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, marketPriceData == null ? null
-				: marketPriceData.getValues().getAt(Instant.now(this.componentManager.getClock())));
-
 		if (marketPriceData == null) {
 			this.prices.set(null);
-			return;
+			setValue(this, TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, null);
+		} else {
+			final var processedPrices = GridSellUtils.processPrices(this.priceCalculator, marketPriceData.getValues());
+			this.prices.set(processedPrices);
+			setValue(this, TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, processedPrices.getFirst());
 		}
-
-		final var processedPrices = GridSellUtils.processPrices(this.priceCalculator, marketPriceData.getValues());
-		this.prices.set(processedPrices);
 	}
 
 	private void onUpdateEvent(MarketPriceUpdateEvent event) {

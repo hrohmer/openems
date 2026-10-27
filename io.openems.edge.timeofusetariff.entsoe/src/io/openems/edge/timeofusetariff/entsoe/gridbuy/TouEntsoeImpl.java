@@ -164,16 +164,17 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 
 		if (marketPriceData == null) {
 			this.prices.set(null);
-			return;
+			setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE_BUY, null);
+		} else {
+			final var globalCurrency = this.meta.getCurrency();
+			final double exchangeRate = getExchangeRateOrElse(marketPriceData.getCurrency(), globalCurrency, 1.);
+			final var gridFees = this.helper.getPrices();
+	
+			final var processedPrices = GridBuyUtils.processPrices(this.componentManager.getClock(), this.priceCalculator,
+					marketPriceData.getValues(), exchangeRate, gridFees);
+			this.prices.set(processedPrices);
+			setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE_BUY, processedPrices.getFirst());
 		}
-
-		final var globalCurrency = this.meta.getCurrency();
-		final double exchangeRate = getExchangeRateOrElse(marketPriceData.getCurrency(), globalCurrency, 1.);
-		final var gridFees = this.helper.getPrices();
-
-		final var processedPrices = GridBuyUtils.processPrices(this.componentManager.getClock(), this.priceCalculator,
-				marketPriceData.getValues(), exchangeRate, gridFees);
-		this.prices.set(processedPrices);
 	}
 
 	@Override

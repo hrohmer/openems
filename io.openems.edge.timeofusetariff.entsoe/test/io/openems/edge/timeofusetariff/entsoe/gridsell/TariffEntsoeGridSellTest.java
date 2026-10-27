@@ -78,7 +78,7 @@ public class TariffEntsoeGridSellTest {
 							httpTestBundle.forceNextSuccessfulResult(HttpResponse.ok(testResponse));
 							httpTestBundle.runTasksImmediately();
 						}) //
-						.output(TariffEntsoeGridSell.ChannelId.CURRENT_PRICE, 99.41) //
+						.output(TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, 99.41) //
 				) //
 		;
 	}

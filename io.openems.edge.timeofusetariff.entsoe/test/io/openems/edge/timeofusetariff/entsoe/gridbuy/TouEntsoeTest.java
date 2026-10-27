@@ -203,7 +203,7 @@ public class TouEntsoeTest {
 							httpTestBundle.forceNextSuccessfulResult(HttpResponse.ok(testResponse));
 							httpTestBundle.runTasksImmediately();
 						}) //
-						.output(TouEntsoe.ChannelId.CURRENT_PRICE, 99.41) //
+						.output(TouEntsoe.ChannelId.CURRENT_PRICE_BUY, 99.41) //
 				) //
 		;
 	}

@@ -13,7 +13,7 @@ public interface TariffEntsoeGridSell extends OpenemsComponent, TariffGridSell {
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		HTTP_STATUS_CODE(Doc.of(OpenemsType.INTEGER)//
 				.text("Displays the HTTP status code")), //
-		CURRENT_PRICE(Doc.of(OpenemsType.DOUBLE)//
+		CURRENT_PRICE_SELL(Doc.of(OpenemsType.DOUBLE)//
 				.unit(Unit.MONEY_PER_MEGAWATT_HOUR)//
 				.persistencePriority(PersistencePriority.HIGH)//
 				.text("The current raw ENTSO-E spot price for this timeslot, in the market currency, before exchange-rate conversion and grid fees")), //

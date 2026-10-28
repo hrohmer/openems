@@ -1,12 +1,14 @@
 package io.openems.edge.timeofusetariff.entsoe.gridsell;
 
 import static io.openems.common.test.TestUtils.createDummyClock;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import org.junit.jupiter.api.Test;
 
@@ -19,6 +21,7 @@ import io.openems.common.bridge.http.time.periodic.DummyPeriodicExecutorFactory;
 import io.openems.common.oem.DummyOpenemsEdgeOem;
 import io.openems.common.test.TimeLeapClock;
 import io.openems.common.types.EntsoeBiddingZone;
+import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.ClockProvider;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
@@ -62,7 +65,7 @@ public class TariffEntsoeGridSellTest {
 
 		var pool = this.createPool(httpTestBundle.factory());
 
-		new ComponentTest(gridSell) //
+		var test = new ComponentTest(gridSell) //
 				.addReference("componentManager", new DummyComponentManager(clock)) //
 				.addReference("marketPriceProviderPool", pool) //
 				.activate(MyConfig.create() //
@@ -70,16 +73,21 @@ public class TariffEntsoeGridSellTest {
 						.setSecurityToken("Unit-Test") //
 						.setBiddingZone(EntsoeBiddingZone.GERMANY) //
 						.setCalculateExpression("x*0.9") //
-						.build())
+						.build());
 
-				.next(new TestCase("Current price channel reflects raw spot price at fetch time") //
-						.onBeforeProcessImage(() -> {
-							var testResponse = this.getTestEntsoeResponse();
-							httpTestBundle.forceNextSuccessfulResult(HttpResponse.ok(testResponse));
-							httpTestBundle.runTasksImmediately();
-						}) //
-						.output(TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, 99.41) //
-				) //
-		;
+		Channel<Double> channel = gridSell.channel(TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL);
+
+		test.next(new TestCase("Current price channel reflects processed price at fetch time") //
+				.onBeforeProcessImage(() -> {
+					var testResponse = this.getTestEntsoeResponse();
+					httpTestBundle.forceNextSuccessfulResult(HttpResponse.ok(testResponse));
+					httpTestBundle.runTasksImmediately();
+				}) //
+		);
+		assertEquals(gridSell.getGridSellPrices().getAt(Instant.now(clock)), channel.getNextValue().get());
+
+		clock.leap(15, ChronoUnit.MINUTES);
+		test.next(new TestCase("Current price channel ticks forward 15 minutes later, with no new fetch"));
+		assertEquals(gridSell.getGridSellPrices().getAt(Instant.now(clock)), channel.getNextValue().get());
 	}
 }

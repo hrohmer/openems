@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,7 @@ import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.oem.DummyOpenemsEdgeOem;
 import io.openems.common.test.TimeLeapClock;
 import io.openems.common.types.EntsoeBiddingZone;
+import io.openems.edge.common.channel.Channel;
 import io.openems.edge.common.component.ClockProvider;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
 import io.openems.edge.common.test.ComponentTest;
@@ -182,7 +184,7 @@ public class TouEntsoeTest {
 
 		var pool = this.createPool(httpTestBundle.factory());
 
-		new ComponentTest(entsoe) //
+		var test = new ComponentTest(entsoe) //
 				.addReference("meta", dummyMeta) //
 				.addReference("componentManager", new DummyComponentManager(clock)) //
 				.addReference("entsoeMarketPriceProviderPool", pool) //
@@ -195,17 +197,22 @@ public class TouEntsoeTest {
 								.build() //
 								.toString()) //
 						.setCalculateExpression("") //
-						.build())
+						.build());
 
-				.next(new TestCase("Current price channel reflects raw spot price at fetch time") //
-						.onBeforeProcessImage(() -> {
-							var testResponse = this.getTestEntsoeResponse();
-							httpTestBundle.forceNextSuccessfulResult(HttpResponse.ok(testResponse));
-							httpTestBundle.runTasksImmediately();
-						}) //
-						.output(TouEntsoe.ChannelId.CURRENT_PRICE_BUY, 99.41) //
-				) //
-		;
+		Channel<Double> channel = entsoe.channel(TouEntsoe.ChannelId.CURRENT_PRICE_BUY);
+
+		test.next(new TestCase("Current price channel reflects processed price at fetch time") //
+				.onBeforeProcessImage(() -> {
+					var testResponse = this.getTestEntsoeResponse();
+					httpTestBundle.forceNextSuccessfulResult(HttpResponse.ok(testResponse));
+					httpTestBundle.runTasksImmediately();
+				}) //
+		);
+		assertEquals(entsoe.getPrices().getAt(Instant.now(clock)), channel.getNextValue().get());
+
+		clock.leap(15, ChronoUnit.MINUTES);
+		test.next(new TestCase("Current price channel ticks forward 15 minutes later, with no new fetch"));
+		assertEquals(entsoe.getPrices().getAt(Instant.now(clock)), channel.getNextValue().get());
 	}
 
 	@Test

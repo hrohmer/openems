@@ -14,6 +14,9 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.event.Event;
+import org.osgi.service.event.EventHandler;
+import org.osgi.service.event.propertytypes.EventTopics;
 import org.osgi.service.metatype.annotations.Designate;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -23,6 +26,7 @@ import io.openems.common.utils.TimeRangeValues;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.meta.Meta;
 import io.openems.edge.timeofusetariff.api.TariffGridSell;
 import io.openems.edge.timeofusetariff.api.TimeOfUsePrices;
@@ -38,8 +42,11 @@ import io.openems.edge.timeofusetariff.entsoe.priceprovider.MarketPriceUpdateEve
 		immediate = true, //
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
+@EventTopics({ //
+		EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
+})
 public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
-		implements OpenemsComponent, TariffGridSell, TariffEntsoeGridSell {
+		implements OpenemsComponent, TariffGridSell, TariffEntsoeGridSell, EventHandler {
 
 	private static final int INTERNAL_ERROR = -1;
 
@@ -107,12 +114,18 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 	private void setPrices(MarketPriceData marketPriceData) {
 		if (marketPriceData == null) {
 			this.prices.set(null);
-			setValue(this, TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, null);
-		} else {
-			final var processedPrices = GridSellUtils.processPrices(this.priceCalculator, marketPriceData.getValues());
-			this.prices.set(processedPrices);
-			setValue(this, TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, processedPrices.getFirst());
+			return;
 		}
+
+		final var processedPrices = GridSellUtils.processPrices(this.priceCalculator, marketPriceData.getValues());
+		this.prices.set(processedPrices);
+	}
+
+	@Override
+	public void handleEvent(Event event) {
+		var currentPrices = this.prices.get();
+		setValue(this, TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, currentPrices == null ? null
+				: currentPrices.getAt(Instant.now(this.componentManager.getClock())));
 	}
 
 	private void onUpdateEvent(MarketPriceUpdateEvent event) {

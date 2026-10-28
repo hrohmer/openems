@@ -16,6 +16,9 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.event.Event;
+import org.osgi.service.event.EventHandler;
+import org.osgi.service.event.propertytypes.EventTopics;
 import org.osgi.service.metatype.annotations.Designate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +30,7 @@ import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.common.event.EdgeEventConstants;
 import io.openems.edge.common.meta.Meta;
 import io.openems.edge.timeofusetariff.api.TimeOfUsePrices;
 import io.openems.edge.timeofusetariff.api.TimeOfUseTariff;
@@ -44,7 +48,11 @@ import io.openems.edge.timeofusetariff.entsoe.priceprovider.MarketPriceUpdateEve
 		immediate = true, //
 		configurationPolicy = ConfigurationPolicy.REQUIRE //
 )
-public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe, OpenemsComponent, TimeOfUseTariff {
+@EventTopics({ //
+		EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
+})
+public class TouEntsoeImpl extends AbstractOpenemsComponent
+		implements TouEntsoe, OpenemsComponent, TimeOfUseTariff, EventHandler {
 	private static final int INTERNAL_ERROR = -1;
 
 	private final Logger log = LoggerFactory.getLogger(TouEntsoeImpl.class);
@@ -159,22 +167,25 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent implements TouEntsoe
 	}
 
 	protected void setPrices(MarketPriceData marketPriceData) {
-		setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE_BUY, marketPriceData == null ? null
-				: marketPriceData.getValues().getAt(Instant.now(this.componentManager.getClock())));
-
 		if (marketPriceData == null) {
 			this.prices.set(null);
-			setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE_BUY, null);
-		} else {
-			final var globalCurrency = this.meta.getCurrency();
-			final double exchangeRate = getExchangeRateOrElse(marketPriceData.getCurrency(), globalCurrency, 1.);
-			final var gridFees = this.helper.getPrices();
-	
-			final var processedPrices = GridBuyUtils.processPrices(this.componentManager.getClock(), this.priceCalculator,
-					marketPriceData.getValues(), exchangeRate, gridFees);
-			this.prices.set(processedPrices);
-			setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE_BUY, processedPrices.getFirst());
+			return;
 		}
+
+		final var globalCurrency = this.meta.getCurrency();
+		final double exchangeRate = getExchangeRateOrElse(marketPriceData.getCurrency(), globalCurrency, 1.);
+		final var gridFees = this.helper.getPrices();
+
+		final var processedPrices = GridBuyUtils.processPrices(this.componentManager.getClock(), this.priceCalculator,
+				marketPriceData.getValues(), exchangeRate, gridFees);
+		this.prices.set(processedPrices);
+	}
+
+	@Override
+	public void handleEvent(Event event) {
+		var currentPrices = this.prices.get();
+		setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE_BUY, currentPrices == null ? null
+				: currentPrices.getAt(Instant.now(this.componentManager.getClock())));
 	}
 
 	@Override

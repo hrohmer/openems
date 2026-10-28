@@ -22,7 +22,7 @@ public interface TouEntsoe extends OpenemsComponent, TimeOfUseTariff {
 		CURRENT_PRICE_BUY(Doc.of(OpenemsType.DOUBLE)//
 				.unit(Unit.MONEY_PER_MEGAWATT_HOUR)//
 				.persistencePriority(PersistencePriority.HIGH)//
-				.text("The current raw ENTSO-E spot price for this timeslot, in the market currency, before exchange-rate conversion and grid fees")), //
+				.text("The current ENTSO-E price for this timeslot, including grid fees and exchange-rate conversion, in the global currency")), //
 		UNABLE_TO_UPDATE_PRICES(Doc.of(Level.WARNING)//
 				.translationKey(TouEntsoe.class, "unableToUpdatePrices")), //
 		;

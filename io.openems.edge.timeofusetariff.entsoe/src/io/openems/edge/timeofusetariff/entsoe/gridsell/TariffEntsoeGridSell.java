@@ -16,7 +16,7 @@ public interface TariffEntsoeGridSell extends OpenemsComponent, TariffGridSell {
 		CURRENT_PRICE_SELL(Doc.of(OpenemsType.DOUBLE)//
 				.unit(Unit.MONEY_PER_MEGAWATT_HOUR)//
 				.persistencePriority(PersistencePriority.HIGH)//
-				.text("The current raw ENTSO-E spot price for this timeslot, in the market currency, before exchange-rate conversion and grid fees")), //
+				.text("The current ENTSO-E price for this timeslot, after applying the configured calculation expression")), //
 		UNABLE_TO_FETCH_MARKET_PRICES(Doc.of(Level.WARNING)//
 				.translationKey(TariffEntsoeGridSell.class, "unableToFetchMarketPrices")), //
 		;

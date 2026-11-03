@@ -4,7 +4,6 @@ import static java.time.temporal.ChronoUnit.DAYS;
 import static java.time.temporal.ChronoUnit.HOURS;
 
 import java.time.Clock;
-import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.util.function.Consumer;
 
@@ -13,24 +12,27 @@ import io.openems.common.bridge.http.api.BridgeHttpFactory;
 import io.openems.common.bridge.http.api.HttpError;
 import io.openems.common.bridge.http.api.HttpResponse;
 import io.openems.common.bridge.http.thirdparty.entsoe.EntsoeApi;
+import io.openems.common.bridge.http.time.DelayTimeProvider;
 import io.openems.common.bridge.http.time.HttpBridgeTimeService;
 import io.openems.common.bridge.http.time.HttpBridgeTimeServiceDefinition;
 import io.openems.common.exceptions.OpenemsError;
 import io.openems.common.types.EntsoeBiddingZone;
 import io.openems.common.utils.StringUtils;
 import io.openems.edge.timeofusetariff.api.TimeOfUsePrices;
-import io.openems.edge.timeofusetariff.api.utils.TimeOfUseDelayTimeProvider;
 import io.openems.edge.timeofusetariff.entsoe.priceprovider.MarketPriceUpdateEvent;
 
 public class HttpEntsoeDataProvider extends EntsoeDataProvider {
 	private final BridgeHttpFactory httpBridgeFactory;
 	private final String securityToken;
+	private final String contractType;
+	private final DelayTimeProvider<TimeOfUsePrices> delayTimeProvider;
 
 	private BridgeHttp httpBridge;
 	private HttpBridgeTimeService timeService;
 
 	public HttpEntsoeDataProvider(BridgeHttpFactory httpBridgeFactory, String securityToken, Clock clock,
-			EntsoeBiddingZone biddingZone, Consumer<MarketPriceUpdateEvent> onUpdate) {
+			EntsoeBiddingZone biddingZone, Consumer<MarketPriceUpdateEvent> onUpdate, String contractType,
+			DelayTimeProvider<TimeOfUsePrices> delayTimeProvider) {
 		super(clock, biddingZone, onUpdate);
 		if (StringUtils.isNullOrEmpty(securityToken)) {
 			throw new RuntimeException("Please configure Security Token to access ENTSO-E");
@@ -38,6 +40,8 @@ public class HttpEntsoeDataProvider extends EntsoeDataProvider {
 
 		this.httpBridgeFactory = httpBridgeFactory;
 		this.securityToken = securityToken;
+		this.contractType = contractType;
+		this.delayTimeProvider = delayTimeProvider;
 
 		this.httpBridge = this.httpBridgeFactory.get();
 		this.timeService = this.httpBridge.createService(HttpBridgeTimeServiceDefinition.INSTANCE);
@@ -46,7 +50,7 @@ public class HttpEntsoeDataProvider extends EntsoeDataProvider {
 	@Override
 	public void activate() {
 		this.timeService.subscribeTime(
-				new TimeOfUseDelayTimeProvider(this.clock, LocalTime.of(EntsoeApi.ENTSOE_UPDATE_HOUR, 0)), //
+				this.delayTimeProvider, //
 				this::createEntsoeEndpoint, //
 				this::handleEndpointResponse, //
 				this::handleEndpointError);
@@ -72,7 +76,8 @@ public class HttpEntsoeDataProvider extends EntsoeDataProvider {
 	private BridgeHttp.Endpoint createEntsoeEndpoint() {
 		final var fromDate = ZonedDateTime.now().truncatedTo(HOURS);
 		final var toDate = fromDate.plusDays(2).truncatedTo(DAYS).minusMinutes(1);
-		return EntsoeApi.INSTANCE.createEndPoint(this.biddingZone, this.securityToken, fromDate, toDate);
+		return EntsoeApi.INSTANCE.createEndPoint(this.biddingZone, this.securityToken, fromDate, toDate,
+				this.contractType);
 	}
 
 	/**

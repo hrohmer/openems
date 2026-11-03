@@ -57,6 +57,51 @@ public class TariffEntsoeGridSellTest {
 		return Resources.toString(resource, StandardCharsets.UTF_8);
 	}
 
+	private String getTestIntradayResponse() throws IOException {
+		var resource = TouEntsoeTest.class.getResource("entsoe-intraday-response.xml");
+		assertNotNull(resource);
+		return Resources.toString(resource, StandardCharsets.UTF_8);
+	}
+
+	@Test
+	public void testIntradayPriceChannel() throws Exception {
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
+		final var clock = new TimeLeapClock(Instant.parse("2026-02-02T00:00:00Z"));
+		final var gridSell = new TariffEntsoeGridSellImpl();
+
+		var pool = this.createPool(httpTestBundle.factory());
+
+		var test = new ComponentTest(gridSell) //
+				.addReference("componentManager", new DummyComponentManager(clock)) //
+				.addReference("marketPriceProviderPool", pool) //
+				.activate(MyConfig.create() //
+						.setId("tariffGridSell0") //
+						.setSecurityToken("Unit-Test") //
+						.setBiddingZone(EntsoeBiddingZone.GERMANY) //
+						.setCalculateExpression("x*0.9") //
+						.build());
+
+		Channel<Double> channel = gridSell.channel(TariffEntsoeGridSell.ChannelId.INTRADAY_PRICE_SELL);
+
+		test.next(new TestCase("Intraday price channel reflects processed intraday price at fetch time") //
+				.onBeforeProcessImage(() -> {
+					var intradayResponse = this.getTestIntradayResponse();
+					httpTestBundle.fetcher().addSingleUseEndpointHandler(endpoint -> {
+						if (!endpoint.url().contains("contract_MarketAgreement.type=A07")) {
+							return null;
+						}
+						return HttpResponse.ok(intradayResponse);
+					});
+					httpTestBundle.runTasksImmediately();
+				}) //
+		);
+		assertEquals(gridSell.getIntradayGridSellPrices().getAt(Instant.now(clock)), channel.getNextValue().get());
+
+		clock.leap(15, ChronoUnit.MINUTES);
+		test.next(new TestCase("Intraday price channel ticks forward 15 minutes later, with no new fetch"));
+		assertEquals(gridSell.getIntradayGridSellPrices().getAt(Instant.now(clock)), channel.getNextValue().get());
+	}
+
 	@Test
 	public void testCurrentPriceChannel() throws Exception {
 		final var httpTestBundle = DummyBridgeHttpBundle.of();

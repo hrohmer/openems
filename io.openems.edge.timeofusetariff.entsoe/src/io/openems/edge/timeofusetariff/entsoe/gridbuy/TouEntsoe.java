@@ -6,6 +6,7 @@ import io.openems.common.channel.Unit;
 import io.openems.common.types.OpenemsType;
 import io.openems.edge.common.channel.Doc;
 import io.openems.edge.common.component.OpenemsComponent;
+import io.openems.edge.timeofusetariff.api.TimeOfUsePrices;
 import io.openems.edge.timeofusetariff.api.TimeOfUseTariff;
 
 public interface TouEntsoe extends OpenemsComponent, TimeOfUseTariff {
@@ -16,6 +17,13 @@ public interface TouEntsoe extends OpenemsComponent, TimeOfUseTariff {
 	 */
 	void triggerPriceUpdate();
 
+	/**
+	 * Returns the current intraday-based time of use prices.
+	 *
+	 * @return current intraday prices
+	 */
+	TimeOfUsePrices getIntradayPrices();
+
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		HTTP_STATUS_CODE(Doc.of(OpenemsType.INTEGER)//
 				.text("Displays the HTTP status code")), //
@@ -23,8 +31,16 @@ public interface TouEntsoe extends OpenemsComponent, TimeOfUseTariff {
 				.unit(Unit.MONEY_PER_MEGAWATT_HOUR)//
 				.persistencePriority(PersistencePriority.HIGH)//
 				.text("The current ENTSO-E price for this timeslot, including grid fees and exchange-rate conversion, in the global currency")), //
+		INTRADAY_PRICE_BUY(Doc.of(OpenemsType.DOUBLE)//
+				.unit(Unit.MONEY_PER_MEGAWATT_HOUR)//
+				.persistencePriority(PersistencePriority.HIGH)//
+				.text("The current ENTSO-E intraday price for this timeslot, including grid fees and exchange-rate conversion, in the global currency")), //
 		UNABLE_TO_UPDATE_PRICES(Doc.of(Level.WARNING)//
 				.translationKey(TouEntsoe.class, "unableToUpdatePrices")), //
+		HTTP_STATUS_CODE_INTRADAY(Doc.of(OpenemsType.INTEGER)//
+				.text("Displays the HTTP status code of the last intraday price fetch")), //
+		UNABLE_TO_UPDATE_INTRADAY_PRICES(Doc.of(Level.WARNING)//
+				.translationKey(TouEntsoe.class, "unableToUpdateIntradayPrices")), //
 		;
 
 		private final Doc doc;

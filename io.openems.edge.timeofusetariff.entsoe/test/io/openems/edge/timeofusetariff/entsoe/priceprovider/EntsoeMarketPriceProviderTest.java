@@ -3,16 +3,26 @@ package io.openems.edge.timeofusetariff.entsoe.priceprovider;
 import static io.openems.common.test.TestUtils.createDummyClock;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 
+import com.google.common.io.Resources;
+
+import io.openems.common.bridge.http.api.BridgeHttpFactory;
+import io.openems.common.bridge.http.api.HttpResponse;
+import io.openems.common.bridge.http.dummy.DummyBridgeHttpBundle;
 import io.openems.common.bridge.http.dummy.DummyBridgeHttpFactory;
 import io.openems.common.bridge.http.time.periodic.DummyPeriodicExecutorFactory;
 import io.openems.common.oem.DummyOpenemsEdgeOem;
 import io.openems.common.types.EntsoeBiddingZone;
 import io.openems.edge.common.component.ClockProvider;
+import io.openems.edge.timeofusetariff.entsoe.gridbuy.TouEntsoeTest;
 
 public class EntsoeMarketPriceProviderTest {
 
@@ -64,5 +74,51 @@ public class EntsoeMarketPriceProviderTest {
 						DummyBridgeHttpFactory::dummyBridgeHttpExecutor), //
 				new DummyPeriodicExecutorFactory() //
 		);
+	}
+
+	@Test
+	public void testIntradayFetch() throws Exception {
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
+		var pool = this.createPool(httpTestBundle.factory());
+
+		var provider = pool.get(new EntsoeConfiguration(EntsoeBiddingZone.GERMANY, "test"));
+
+		var intradayResponse = this.getTestIntradayResponse();
+		httpTestBundle.fetcher().addSingleUseEndpointHandler(endpoint -> {
+			if (!endpoint.url().contains("contract_MarketAgreement.type=A07")) {
+				return null;
+			}
+			return HttpResponse.ok(intradayResponse);
+		});
+		httpTestBundle.runTasksImmediately();
+
+		var intradayPrices = provider.getIntradayPrices().getValue();
+		assertNotNull(intradayPrices);
+		assertEquals(50.0, intradayPrices.getValues().getAt(Instant.parse("2026-02-02T00:00:00Z")), 0.001);
+	}
+
+	private EntsoeMarketPriceProviderPoolImpl createPool(BridgeHttpFactory httpBridgeFactory) {
+		final var clock = createDummyClock();
+		final var dummyOem = new DummyOpenemsEdgeOem();
+
+		var dummyClockProvider = new ClockProvider() {
+			@Override
+			public Clock getClock() {
+				return clock;
+			}
+		};
+
+		return new EntsoeMarketPriceProviderPoolImpl(//
+				dummyOem, //
+				dummyClockProvider, //
+				httpBridgeFactory, //
+				new DummyPeriodicExecutorFactory() //
+		);
+	}
+
+	private String getTestIntradayResponse() throws IOException {
+		var resource = TouEntsoeTest.class.getResource("entsoe-intraday-response.xml");
+		assertNotNull(resource);
+		return Resources.toString(resource, StandardCharsets.UTF_8);
 	}
 }

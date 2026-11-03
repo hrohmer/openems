@@ -4889,6 +4889,20 @@ public class EntsoeApiTest {
 	}
 
 	@Test
+	public void testCreateEndPointContractType() {
+		var fromDate = ZonedDateTime.parse("2026-02-01T23:00:00Z");
+		var toDate = ZonedDateTime.parse("2026-02-03T23:00:00Z");
+
+		var dayAheadEndpoint = EntsoeApi.INSTANCE.createEndPoint(EntsoeBiddingZone.GERMANY, "test-token", fromDate,
+				toDate, "A01");
+		assertTrue(dayAheadEndpoint.url().contains("contract_MarketAgreement.type=A01"));
+
+		var intradayEndpoint = EntsoeApi.INSTANCE.createEndPoint(EntsoeBiddingZone.GERMANY, "test-token", fromDate,
+				toDate, "A07");
+		assertTrue(intradayEndpoint.url().contains("contract_MarketAgreement.type=A07"));
+	}
+
+	@Test
 	public void testCalculateDelay() throws OpenemsError.OpenemsNamedException {
 
 		var baseTime = ZonedDateTime.parse("2025-01-01T10:00:00Z");

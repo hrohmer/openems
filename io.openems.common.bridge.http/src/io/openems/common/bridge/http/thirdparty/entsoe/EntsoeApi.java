@@ -66,25 +66,23 @@ public class EntsoeApi {
 
 	/**
 	 * Creates and configures a {@link BridgeHttp.Endpoint} for querying the ENTSO-E
-	 * Transparency Platform API for electricity prices.
+	 * Transparency Platform API for day-ahead electricity prices.
 	 *
-	 * @param biddingZone  the {@link EntsoeBiddingZone} to query (e.g. Germany,
-	 *                     Austria)
-	 * @param token        the ENTSO-E security token used for authentication
-	 * @param fromDate     the start time of the query period (inclusive)
-	 * @param toDate       the end time of the query period (exclusive)
-	 * @param contractType the ENTSO-E {@code contract_MarketAgreement.type}
-	 *                     ("A01" for day-ahead, "A07" for intraday auctions)
+	 * @param biddingZone the {@link EntsoeBiddingZone} to query (e.g. Germany,
+	 *                    Austria)
+	 * @param token       the ENTSO-E security token used for authentication
+	 * @param fromDate    the start time of the query period (inclusive)
+	 * @param toDate      the end time of the query period (exclusive)
 	 * @return a configured {@link BridgeHttp.Endpoint}.
 	 */
 	public BridgeHttp.Endpoint createEndPoint(EntsoeBiddingZone biddingZone, String token, ZonedDateTime fromDate,
-			ZonedDateTime toDate, String contractType) {
+			ZonedDateTime toDate) {
 		var urlBuilder = UrlBuilder.parse(URI) //
 				.withQueryParam("securityToken", token) //
 				.withQueryParam("documentType", "A44") //
 				.withQueryParam("in_Domain", biddingZone.code) //
 				.withQueryParam("out_Domain", biddingZone.code) //
-				.withQueryParam("contract_MarketAgreement.type", contractType) //
+				.withQueryParam("contract_MarketAgreement.type", "A01") //
 				.withQueryParam("periodStart", fromDate.withZoneSameInstant(UTC) //
 						.format(URL_DATE_FORMATTER)) //
 				.withQueryParam("periodEnd", toDate.withZoneSameInstant(UTC) //

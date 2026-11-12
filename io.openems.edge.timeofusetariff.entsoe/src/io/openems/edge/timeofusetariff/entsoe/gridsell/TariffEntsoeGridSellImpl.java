@@ -61,10 +61,7 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 
 	private final Consumer<MarketPriceData> onNewMarketPrices = this::setPrices;
 	private final Consumer<MarketPriceUpdateEvent> onUpdateEvent = this::onUpdateEvent;
-	private final Consumer<MarketPriceData> onNewIntradayMarketPrices = this::setIntradayPrices;
-	private final Consumer<MarketPriceUpdateEvent> onIntradayUpdateEvent = this::onIntradayUpdateEvent;
 	private final AtomicReference<TimeRangeValues<Double>> prices = new AtomicReference<>(null);
-	private final AtomicReference<TimeRangeValues<Double>> intradayPrices = new AtomicReference<>(null);
 
 	private EntsoeMarketPriceProvider priceProvider;
 	private PriceCalculatorX priceCalculator;
@@ -90,8 +87,6 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 
 		this.priceProvider.getMarketPrices().subscribe(this.onNewMarketPrices);
 		this.priceProvider.getUpdateState().subscribe(this.onUpdateEvent);
-		this.priceProvider.getIntradayPrices().subscribe(this.onNewIntradayMarketPrices);
-		this.priceProvider.getIntradayUpdateState().subscribe(this.onIntradayUpdateEvent);
 	}
 
 	@Deactivate
@@ -101,8 +96,6 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 		if (this.priceProvider != null) {
 			this.priceProvider.getMarketPrices().unsubscribe(this.onNewMarketPrices);
 			this.priceProvider.getUpdateState().unsubscribe(this.onUpdateEvent);
-			this.priceProvider.getIntradayPrices().unsubscribe(this.onNewIntradayMarketPrices);
-			this.priceProvider.getIntradayUpdateState().unsubscribe(this.onIntradayUpdateEvent);
 			this.marketPriceProviderPool.unget(this.priceProvider);
 			this.priceProvider = null;
 		}
@@ -118,16 +111,6 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 		return TimeOfUsePrices.from(Instant.now(this.componentManager.getClock()), currentPrices);
 	}
 
-	@Override
-	public TimeOfUsePrices getIntradayGridSellPrices() {
-		var currentIntradayPrices = this.intradayPrices.get();
-		if (currentIntradayPrices == null) {
-			return TimeOfUsePrices.EMPTY_PRICES;
-		}
-
-		return TimeOfUsePrices.from(Instant.now(this.componentManager.getClock()), currentIntradayPrices);
-	}
-
 	private void setPrices(MarketPriceData marketPriceData) {
 		if (marketPriceData == null) {
 			this.prices.set(null);
@@ -138,25 +121,11 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 		this.prices.set(processedPrices);
 	}
 
-	private void setIntradayPrices(MarketPriceData marketPriceData) {
-		if (marketPriceData == null) {
-			this.intradayPrices.set(null);
-			return;
-		}
-
-		final var processedPrices = GridSellUtils.processPrices(this.priceCalculator, marketPriceData.getValues());
-		this.intradayPrices.set(processedPrices);
-	}
-
 	@Override
 	public void handleEvent(Event event) {
 		var currentPrices = this.prices.get();
 		setValue(this, TariffEntsoeGridSell.ChannelId.CURRENT_PRICE_SELL, currentPrices == null ? null
 				: currentPrices.getAt(Instant.now(this.componentManager.getClock())));
-
-		var currentIntradayPrices = this.intradayPrices.get();
-		setValue(this, TariffEntsoeGridSell.ChannelId.INTRADAY_PRICE_SELL, currentIntradayPrices == null ? null
-				: currentIntradayPrices.getAt(Instant.now(this.componentManager.getClock())));
 	}
 
 	private void onUpdateEvent(MarketPriceUpdateEvent event) {
@@ -173,24 +142,6 @@ public class TariffEntsoeGridSellImpl extends AbstractOpenemsComponent
 		case MarketPriceUpdateEvent.FailedWithException(var exception) -> {
 			setValue(this, TariffEntsoeGridSell.ChannelId.HTTP_STATUS_CODE, INTERNAL_ERROR);
 			setValue(this, TariffEntsoeGridSell.ChannelId.UNABLE_TO_FETCH_MARKET_PRICES, true);
-		}
-		}
-	}
-
-	private void onIntradayUpdateEvent(MarketPriceUpdateEvent event) {
-		switch (event) {
-		case null -> doNothing();
-		case MarketPriceUpdateEvent.Successful(var data) -> {
-			setValue(this, TariffEntsoeGridSell.ChannelId.HTTP_STATUS_CODE_INTRADAY, 200);
-			setValue(this, TariffEntsoeGridSell.ChannelId.UNABLE_TO_FETCH_INTRADAY_MARKET_PRICES, false);
-		}
-		case MarketPriceUpdateEvent.FailedWithHttpError(var httpStatus, var httpBody) -> {
-			setValue(this, TariffEntsoeGridSell.ChannelId.HTTP_STATUS_CODE_INTRADAY, httpStatus.code());
-			setValue(this, TariffEntsoeGridSell.ChannelId.UNABLE_TO_FETCH_INTRADAY_MARKET_PRICES, true);
-		}
-		case MarketPriceUpdateEvent.FailedWithException(var exception) -> {
-			setValue(this, TariffEntsoeGridSell.ChannelId.HTTP_STATUS_CODE_INTRADAY, INTERNAL_ERROR);
-			setValue(this, TariffEntsoeGridSell.ChannelId.UNABLE_TO_FETCH_INTRADAY_MARKET_PRICES, true);
 		}
 		}
 	}

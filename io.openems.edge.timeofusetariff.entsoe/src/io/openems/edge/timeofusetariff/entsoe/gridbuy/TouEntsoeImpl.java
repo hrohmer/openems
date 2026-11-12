@@ -57,7 +57,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent
 
 	private final Logger log = LoggerFactory.getLogger(TouEntsoeImpl.class);
 	private final AtomicReference<TimeRangeValues<Double>> prices = new AtomicReference<>(null);
-	private final AtomicReference<TimeRangeValues<Double>> intradayPrices = new AtomicReference<>(null);
 
 	@Reference
 	private EntsoeMarketPriceProviderPool entsoeMarketPriceProviderPool;
@@ -74,8 +73,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent
 
 	private final Consumer<MarketPriceUpdateEvent> onUpdateEvent = this::onUpdateEvent;
 	private final Consumer<MarketPriceData> onNewPrices = this::setPrices;
-	private final Consumer<MarketPriceUpdateEvent> onIntradayUpdateEvent = this::onIntradayUpdateEvent;
-	private final Consumer<MarketPriceData> onNewIntradayPrices = this::setIntradayPrices;
 	private final BiConsumer<Value<Integer>, Value<Integer>> onCurrencyChange = (a, b) -> this
 			.reloadPricesDueToCurrencyChange();
 
@@ -90,7 +87,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent
 		if (this.priceProvider != null) {
 			this.logInfo(this.log, "Triggering price update due to currency change ...");
 			this.setPrices(this.priceProvider.getMarketPrices().getValue());
-			this.setIntradayPrices(this.priceProvider.getIntradayPrices().getValue());
 		}
 	}
 
@@ -116,8 +112,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent
 				.get(new EntsoeConfiguration(config.biddingZone(), config.securityToken()));
 		this.priceProvider.getMarketPrices().subscribe(this.onNewPrices);
 		this.priceProvider.getUpdateState().subscribe(this.onUpdateEvent);
-		this.priceProvider.getIntradayPrices().subscribe(this.onNewIntradayPrices);
-		this.priceProvider.getIntradayUpdateState().subscribe(this.onIntradayUpdateEvent);
 
 		// React on updates to Currency.
 		this.meta.getCurrencyChannel().onChange(this.onCurrencyChange);
@@ -146,8 +140,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent
 		if (this.priceProvider != null) {
 			this.priceProvider.getMarketPrices().unsubscribe(this.onNewPrices);
 			this.priceProvider.getUpdateState().unsubscribe(this.onUpdateEvent);
-			this.priceProvider.getIntradayPrices().unsubscribe(this.onNewIntradayPrices);
-			this.priceProvider.getIntradayUpdateState().unsubscribe(this.onIntradayUpdateEvent);
 			this.entsoeMarketPriceProviderPool.unget(this.priceProvider);
 			this.priceProvider = null;
 		}
@@ -174,27 +166,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent
 		}
 	}
 
-	protected void onIntradayUpdateEvent(MarketPriceUpdateEvent event) {
-		if (event == null) {
-			return;
-		}
-
-		switch (event) {
-		case MarketPriceUpdateEvent.Successful(var data) -> {
-			setValue(this, TouEntsoe.ChannelId.HTTP_STATUS_CODE_INTRADAY, 200);
-			setValue(this, TouEntsoe.ChannelId.UNABLE_TO_UPDATE_INTRADAY_PRICES, false);
-		}
-		case MarketPriceUpdateEvent.FailedWithHttpError(var httpStatus, var httpBody) -> {
-			setValue(this, TouEntsoe.ChannelId.HTTP_STATUS_CODE_INTRADAY, httpStatus.code());
-			setValue(this, TouEntsoe.ChannelId.UNABLE_TO_UPDATE_INTRADAY_PRICES, true);
-		}
-		case MarketPriceUpdateEvent.FailedWithException(var exception) -> {
-			setValue(this, TouEntsoe.ChannelId.HTTP_STATUS_CODE_INTRADAY, INTERNAL_ERROR);
-			setValue(this, TouEntsoe.ChannelId.UNABLE_TO_UPDATE_INTRADAY_PRICES, true);
-		}
-		}
-	}
-
 	protected void setPrices(MarketPriceData marketPriceData) {
 		if (marketPriceData == null) {
 			this.prices.set(null);
@@ -210,30 +181,11 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent
 		this.prices.set(processedPrices);
 	}
 
-	protected void setIntradayPrices(MarketPriceData marketPriceData) {
-		if (marketPriceData == null) {
-			this.intradayPrices.set(null);
-			return;
-		}
-
-		final var globalCurrency = this.meta.getCurrency();
-		final double exchangeRate = getExchangeRateOrElse(marketPriceData.getCurrency(), globalCurrency, 1.);
-		final var gridFees = this.helper.getPrices();
-
-		final var processedPrices = GridBuyUtils.processPrices(this.componentManager.getClock(), this.priceCalculator,
-				marketPriceData.getValues(), exchangeRate, gridFees);
-		this.intradayPrices.set(processedPrices);
-	}
-
 	@Override
 	public void handleEvent(Event event) {
 		var currentPrices = this.prices.get();
 		setValue(this, TouEntsoe.ChannelId.CURRENT_PRICE_BUY, currentPrices == null ? null
 				: currentPrices.getAt(Instant.now(this.componentManager.getClock())));
-
-		var currentIntradayPrices = this.intradayPrices.get();
-		setValue(this, TouEntsoe.ChannelId.INTRADAY_PRICE_BUY, currentIntradayPrices == null ? null
-				: currentIntradayPrices.getAt(Instant.now(this.componentManager.getClock())));
 	}
 
 	@Override
@@ -244,16 +196,6 @@ public class TouEntsoeImpl extends AbstractOpenemsComponent
 		}
 
 		return TimeOfUsePrices.from(Instant.now(this.componentManager.getClock()), currentPrices);
-	}
-
-	@Override
-	public TimeOfUsePrices getIntradayPrices() {
-		var currentIntradayPrices = this.intradayPrices.get();
-		if (currentIntradayPrices == null) {
-			return TimeOfUsePrices.EMPTY_PRICES;
-		}
-
-		return TimeOfUsePrices.from(Instant.now(this.componentManager.getClock()), currentIntradayPrices);
 	}
 
 	@Override

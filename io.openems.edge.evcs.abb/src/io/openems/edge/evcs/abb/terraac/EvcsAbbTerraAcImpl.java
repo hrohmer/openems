@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.edge.bridge.modbus.api.AbstractOpenemsModbusComponent;
 import io.openems.edge.bridge.modbus.api.BridgeModbus;
-import io.openems.edge.bridge.modbus.api.ElementToChannelConverter;
+import io.openems.edge.bridge.modbus.api.ElementToChannelConverters;
 import io.openems.edge.bridge.modbus.api.ModbusComponent;
 import io.openems.edge.bridge.modbus.api.ModbusProtocol;
 import io.openems.edge.bridge.modbus.api.element.BitsWordElement;
@@ -646,15 +646,15 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	}
 
 	private final FC3ReadRegistersTask deviceInformationTask = new FC3ReadRegistersTask(0x4000, Priority.LOW, //
-			this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0000), ElementToChannelConverter.DIRECT_1_TO_1) //
+			this.m(EvcsAbbTerraAc.ChannelId.SERIAL_NUMBER, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0000), ElementToChannelConverters.DIRECT_1_TO_1) //
 				.onUpdateCallback(v -> {
 					if (v != null && v instanceof Integer) {
 						final Integer value = Integer.class.cast(v);
 						logger.info("Serial number: 0x{}", Integer.toHexString(value));
 					}
 				}),
-			this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), ElementToChannelConverter.DIRECT_1_TO_1),
-			this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0002), ElementToChannelConverter.DIRECT_1_TO_1) //
+			this.m(EvcsAbbTerraAc.ChannelId.PRODUCTION_BLOCK, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0001), ElementToChannelConverters.DIRECT_1_TO_1),
+			this.m(EvcsAbbTerraAc.ChannelId.SPARE_PLANT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0002), ElementToChannelConverters.DIRECT_1_TO_1) //
 				.onUpdateCallback(v -> {
 					if (v != null && v instanceof Integer) {
 						final Integer value = Integer.class.cast(v);
@@ -664,14 +664,14 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 		);
 	
 	private final FC3ReadRegistersTask deviceTypeTask = new FC3ReadRegistersTask(0x4003, Priority.HIGH, //
-			this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), ElementToChannelConverter.DIRECT_1_TO_1), //
-			this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0004), ElementToChannelConverter.DIRECT_1_TO_1)
+			this.m(EvcsAbbTerraAc.ChannelId.TYPE_BLOCK, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0003), ElementToChannelConverters.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.FIRMWARE_VERSION, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0004), ElementToChannelConverters.DIRECT_1_TO_1)
 		);
 
 	private final FC3ReadRegistersTask deviceMeasurementTask = new FC3ReadRegistersTask(0x4006, Priority.HIGH, //
-			this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0006), ElementToChannelConverter.DIRECT_1_TO_1), //
-			this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0008), ElementToChannelConverter.DIRECT_1_TO_1), //
-			this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x000A), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0006), ElementToChannelConverters.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0008), ElementToChannelConverters.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x000A), ElementToChannelConverters.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
 			this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this) //
 				.bit(8, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_IDLE) //
@@ -680,47 +680,47 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				.bit(11, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C1) //
 				.bit(12, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_C2) //
 				.bit(15, EvcsAbbTerraAc.ChannelId.CHARGING_STATE_AT_RATED_CURRENT)), //
-			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x000E), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x000E), ElementToChannelConverters.DIRECT_1_TO_1), //
 			this.m(ElectricityMeter.ChannelId.CURRENT_L1,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0010),
-					ElementToChannelConverter.DIRECT_1_TO_1), //
+					ElementToChannelConverters.DIRECT_1_TO_1), //
 			this.m(ElectricityMeter.ChannelId.CURRENT_L2,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0012),
-					ElementToChannelConverter.DIRECT_1_TO_1), //
+					ElementToChannelConverters.DIRECT_1_TO_1), //
 			this.m(ElectricityMeter.ChannelId.CURRENT_L3,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0014),
-					ElementToChannelConverter.DIRECT_1_TO_1), //
+					ElementToChannelConverters.DIRECT_1_TO_1), //
 			this.m(ElectricityMeter.ChannelId.VOLTAGE_L1,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0016),
-					ElementToChannelConverter.SCALE_FACTOR_2),
+					ElementToChannelConverters.SCALE_FACTOR_2),
 			this.m(ElectricityMeter.ChannelId.VOLTAGE_L2,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0018),
-					ElementToChannelConverter.SCALE_FACTOR_2),
+					ElementToChannelConverters.SCALE_FACTOR_2),
 			this.m(ElectricityMeter.ChannelId.VOLTAGE_L3,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001A),
-					ElementToChannelConverter.SCALE_FACTOR_2),
+					ElementToChannelConverters.SCALE_FACTOR_2),
 			this.m(ElectricityMeter.ChannelId.ACTIVE_POWER,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001C),
-					ElementToChannelConverter.DIRECT_1_TO_1), //
+					ElementToChannelConverters.DIRECT_1_TO_1), //
 			this.m(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY,
 					new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x001E),
-					ElementToChannelConverter.DIRECT_1_TO_1), //
-			this.m(EvcsAbbTerraAc.ChannelId.COMMUNICATION_TIMEOUT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0020), ElementToChannelConverter.DIRECT_1_TO_1), //
+					ElementToChannelConverters.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.COMMUNICATION_TIMEOUT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0020), ElementToChannelConverters.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0021), //
-			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0022), ElementToChannelConverter.DIRECT_1_TO_1), //
-			this.m(EvcsAbbTerraAc.ChannelId.FALLBACK_LIMIT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0024), ElementToChannelConverter.DIRECT_1_TO_1),
+			this.m(EvcsAbbTerraAc.ChannelId.CHARGING_CURRENT_LIMIT_BY_MODBUS, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0022), ElementToChannelConverters.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.FALLBACK_LIMIT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0024), ElementToChannelConverters.DIRECT_1_TO_1),
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0025) //
 		);
 
 	private final FC16WriteRegistersTask deviceControlTask = new FC16WriteRegistersTask(0x4100, //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0100), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_CHARGING_CURRENT_LIMIT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0100), ElementToChannelConverters.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0102), //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0103), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_LOCK_UNLOCK_SOCKET_CABLE, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0103), ElementToChannelConverters.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0104), //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_START_STOP, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0105), ElementToChannelConverter.DIRECT_1_TO_1), //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0106), ElementToChannelConverter.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_START_STOP, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0105), ElementToChannelConverters.DIRECT_1_TO_1), //
+			this.m(EvcsAbbTerraAc.ChannelId.SET_COMMUNICATION_TIMEOUT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0106), ElementToChannelConverters.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0107, DEVICE_START_ADDRESS | 0x0108), //
-			this.m(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0109), ElementToChannelConverter.DIRECT_1_TO_1)
+			this.m(EvcsAbbTerraAc.ChannelId.SET_FALLBACK_LIMIT, new UnsignedWordElement(DEVICE_START_ADDRESS | 0x0109), ElementToChannelConverters.DIRECT_1_TO_1)
 		);
 
 }

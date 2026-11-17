@@ -215,16 +215,18 @@ public abstract class AbstractTariffComponent extends AbstractOpenemsComponent
 							.unit(Unit.UNIX_TIMESTAMP_SECONDS) //
 							.persistencePriority(PersistencePriority.VERY_LOW));
 
+			// Local fork customization: HIGH so backend receives this.
 			this.currentPrice = new ChannelIdImpl(this.n("CURRENT_PRICE"), //
 					Doc.of(OpenemsType.DOUBLE) //
 							.unit(Unit.MONEY_PER_MEGAWATT_HOUR) //
-							.persistencePriority(PersistencePriority.VERY_LOW));
+							.persistencePriority(PersistencePriority.HIGH));
 			this.copyright = new ChannelIdImpl(this.n("COPYRIGHT"), //
 					Doc.of(OpenemsType.STRING) //
 							.persistencePriority(PersistencePriority.VERY_LOW));
+			// Local fork customization: HIGH so backend receives the unit alongside the value.
 			this.currency = new ChannelIdImpl(this.n("CURRENCY"), //
 					Doc.of(OpenemsType.STRING) //
-							.persistencePriority(PersistencePriority.VERY_LOW));
+							.persistencePriority(PersistencePriority.HIGH));
 			this.fetchStatus = new ChannelIdImpl(this.n("FETCH_STATUS"), //
 					Doc.of(OpenemsType.STRING) //
 							.persistencePriority(PersistencePriority.VERY_LOW));

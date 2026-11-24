@@ -604,7 +604,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			.append("| L3 active power: ").append(getActivePowerL3().orElse(null)) //
 			.append("| L1 energy: ").append(getActiveConsumptionEnergyL1().orElse(null)) //
 			.append("| L2 energy: ").append(getActiveConsumptionEnergyL2().orElse(null)) //
-			.append("| L3 energy: ").append(getActiveConsumptionEnergyL1().orElse(null)) //
+			.append("| L3 energy: ").append(getActiveConsumptionEnergyL3().orElse(null)) //
 			.append("| Power: ").append(getActivePower().orElse(null)) //
 			.append("| Energy: ").append(getActiveConsumptionEnergy().orElse(null)) //
  			.append("| Status:").append(this.getStatus()) //

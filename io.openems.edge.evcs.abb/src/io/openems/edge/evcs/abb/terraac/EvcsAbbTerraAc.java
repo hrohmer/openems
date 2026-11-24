@@ -16,7 +16,7 @@ import io.openems.edge.common.component.OpenemsComponent;
 public interface EvcsAbbTerraAc extends OpenemsComponent {
 
 	/**
-	 * Chapter 4.2. Device Identification (start 0x1000)
+	 * Chapter 4.2. Device Identification (start 0x4000)
 	 */
 	public static final int DEVICE_START_ADDRESS = 0x4000;
 
@@ -78,8 +78,9 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 				.persistencePriority(PersistencePriority.HIGH) //
 				.text("Charging Current Limit") ),
 		COMMUNICATION_TIMEOUT(Doc.of(OpenemsType.INTEGER) //
+				.unit(Unit.SECONDS) //
 				.persistencePriority(PersistencePriority.HIGH) //
-				.text("Charging State")),
+				.text("Communication timeout")),
 		CHARGING_CURRENT_LIMIT_BY_MODBUS(Doc.of(OpenemsType.INTEGER) //
 				.unit(Unit.MILLIAMPERE) //
 				.persistencePriority(PersistencePriority.HIGH) //

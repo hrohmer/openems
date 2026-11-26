@@ -41,7 +41,7 @@ public class EvsAbbTerraAcImplTest {
 						0x00ED, // User Settable Max Current
 						0x2AD8, // 15543000 mA
 						0x0000, // Error Code 
-						0x0800, //
+						0x0810, // Internal communication failure + under voltage
 						0x0000, // Socket Lock State
 						0x0111, //
 						0x0000, // Charging State
@@ -130,7 +130,10 @@ public class EvsAbbTerraAcImplTest {
 	public void testErrorCode() throws Exception {
 		this.componentTest.activate(CONFIG)
 		.next(new TestCase()//
-				.output(EvcsAbbTerraAc.ChannelId.ERROR_CODE, ErrorCodes.INTERNAL_COMMUNICATION_FAILURE)
+				.output(EvcsAbbTerraAc.ChannelId.INTERNAL_COMMUNICATION_FAILURE, true)
+				.output(EvcsAbbTerraAc.ChannelId.UNDER_VOLTAGE, true)
+				.output(EvcsAbbTerraAc.ChannelId.OVER_VOLTAGE, false)
+				.output(EvcsAbbTerraAc.ChannelId.MODBUS_COMMUNICATION_LOST, false)
 				)
 		.deactivate();
 	}

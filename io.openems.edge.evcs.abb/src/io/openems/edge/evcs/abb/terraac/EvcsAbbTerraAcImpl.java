@@ -6,6 +6,7 @@ import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUT
 import static io.openems.edge.evcs.api.EvcsUtils.milliampereToWatt;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.osgi.service.cm.ConfigurationAdmin;
@@ -43,6 +44,7 @@ import io.openems.edge.common.channel.EnumWriteChannel;
 import io.openems.edge.common.channel.IntegerReadChannel;
 import io.openems.edge.common.channel.IntegerWriteChannel;
 import io.openems.edge.common.channel.ShortReadChannel;
+import io.openems.edge.common.channel.StateChannel;
 import io.openems.edge.common.channel.value.Value;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.taskmanager.Priority;
@@ -105,6 +107,20 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L2);
 	private final CalculateEnergyFromPower phaseEnergyL3 = new CalculateEnergyFromPower(this,
 			ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY_L3);
+
+	private static final List<EvcsAbbTerraAc.ChannelId> ERROR_CHANNEL_IDS = List.of(//
+			EvcsAbbTerraAc.ChannelId.RESIDUAL_CURRENT_DETECTED, //
+			EvcsAbbTerraAc.ChannelId.PE_MISSING_OR_SWAP_NEUTRAL_AND_PHASE, //
+			EvcsAbbTerraAc.ChannelId.OVER_VOLTAGE, //
+			EvcsAbbTerraAc.ChannelId.UNDER_VOLTAGE, //
+			EvcsAbbTerraAc.ChannelId.OVER_CURRENT, //
+			EvcsAbbTerraAc.ChannelId.SEVERE_OVER_CURRENT, //
+			EvcsAbbTerraAc.ChannelId.OVER_TEMPERATURE, //
+			EvcsAbbTerraAc.ChannelId.POWER_RELAY_FAULT, //
+			EvcsAbbTerraAc.ChannelId.INTERNAL_COMMUNICATION_FAILURE, //
+			EvcsAbbTerraAc.ChannelId.E_LOCK_FAILURE, //
+			EvcsAbbTerraAc.ChannelId.MISSING_PHASE, //
+			EvcsAbbTerraAc.ChannelId.MODBUS_COMMUNICATION_LOST);
 
 	private Config config;
 
@@ -240,7 +256,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 				break;
 				
 			case TOPIC_CYCLE_AFTER_PROCESS_IMAGE:
-				if (ErrorCodes.NONE.compareTo(getError()) != 0) {
+				if (this.hasError()) {
 					this._setStatus(Status.ERROR);
 				
 				} else if (isChargingStateIdle()) {					
@@ -312,8 +328,8 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 //				getLockState().value().asEnum() != LockState.CABLE_CONNECTED_CHARGING_STATION_LOCKED_ELECTRIC_VEHICLE) {
 //			applyDisplayText("Socket connection not ready: " + getLockState().value().asEnum().getName());
 //			
-//		} else if (getErrorChannel().value().asEnum() != ErrorCodes.NONE) {
-//			applyDisplayText(getErrorChannel().value().asEnum().getName());
+//		} else if (hasError()) {
+//			applyDisplayText(getActiveErrors().toString());
 //			
 //		} else {
 			final Double currentAmpere = Integer.valueOf(power).doubleValue() / this.getPhasesAsInt() / Evcs.DEFAULT_VOLTAGE;
@@ -417,12 +433,14 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 	}
 	
 
-	private EnumReadChannel getErrorChannel() {
-		return this.channel(EvcsAbbTerraAc.ChannelId.ERROR_CODE);
+	private List<EvcsAbbTerraAc.ChannelId> getActiveErrors() {
+		return ERROR_CHANNEL_IDS.stream() //
+				.filter(id -> this.<StateChannel>channel(id).value().orElse(false)) //
+				.toList();
 	}
 
-	private ErrorCodes getError() {
-		return getErrorChannel().value().asEnum();
+	private boolean hasError() {
+		return !this.getActiveErrors().isEmpty();
 	}
 
 	
@@ -608,7 +626,7 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 			.append("| Power: ").append(getActivePower().orElse(null)) //
 			.append("| Energy: ").append(getActiveConsumptionEnergy().orElse(null)) //
  			.append("| Status:").append(this.getStatus()) //
-			.append("| Error:").append(this.getError()) //
+			.append("| Error:").append(this.getActiveErrors()) //
 			;
 		if (!this.config.readOnly()) { 
 				sb.append("| Set Charging power: ").append(this.getSetChargePowerLimit().orElse(null)) //
@@ -670,7 +688,21 @@ public class EvcsAbbTerraAcImpl extends AbstractOpenemsModbusComponent implement
 
 	private final FC3ReadRegistersTask deviceMeasurementTask = new FC3ReadRegistersTask(0x4006, Priority.HIGH, //
 			this.m(EvcsAbbTerraAc.ChannelId.MAX_CURRENT, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0006), ElementToChannelConverters.DIRECT_1_TO_1), //
-			this.m(EvcsAbbTerraAc.ChannelId.ERROR_CODE, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x0008), ElementToChannelConverters.DIRECT_1_TO_1), //
+			// Error code is a 32 bit register, but all defined bits are in the low word
+			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x0008), //
+			this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x0009, this) //
+				.bit(1, EvcsAbbTerraAc.ChannelId.RESIDUAL_CURRENT_DETECTED) //
+				.bit(2, EvcsAbbTerraAc.ChannelId.PE_MISSING_OR_SWAP_NEUTRAL_AND_PHASE) //
+				.bit(3, EvcsAbbTerraAc.ChannelId.OVER_VOLTAGE) //
+				.bit(4, EvcsAbbTerraAc.ChannelId.UNDER_VOLTAGE) //
+				.bit(5, EvcsAbbTerraAc.ChannelId.OVER_CURRENT) //
+				.bit(6, EvcsAbbTerraAc.ChannelId.SEVERE_OVER_CURRENT) //
+				.bit(7, EvcsAbbTerraAc.ChannelId.OVER_TEMPERATURE) //
+				.bit(10, EvcsAbbTerraAc.ChannelId.POWER_RELAY_FAULT) //
+				.bit(11, EvcsAbbTerraAc.ChannelId.INTERNAL_COMMUNICATION_FAILURE) //
+				.bit(12, EvcsAbbTerraAc.ChannelId.E_LOCK_FAILURE) //
+				.bit(13, EvcsAbbTerraAc.ChannelId.MISSING_PHASE) //
+				.bit(14, EvcsAbbTerraAc.ChannelId.MODBUS_COMMUNICATION_LOST)), //
 			this.m(EvcsAbbTerraAc.ChannelId.SOCKET_LOCK_STATE, new UnsignedDoublewordElement(DEVICE_START_ADDRESS | 0x000A), ElementToChannelConverters.DIRECT_1_TO_1), //
 			new DummyRegisterElement(DEVICE_START_ADDRESS | 0x000C), //
 			this.m(new BitsWordElement(DEVICE_START_ADDRESS | 0x000D, this) //

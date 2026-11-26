@@ -1,6 +1,7 @@
 package io.openems.edge.evcs.abb.terraac;
 
 import io.openems.common.channel.AccessMode;
+import io.openems.common.channel.Level;
 import io.openems.common.channel.PersistencePriority;
 import io.openems.common.channel.Unit;
 import io.openems.common.types.OpenemsType;
@@ -55,9 +56,31 @@ public interface EvcsAbbTerraAc extends OpenemsComponent {
 				.unit(Unit.MILLIAMPERE) //
 				.persistencePriority(PersistencePriority.HIGH) //
 				.text("User Settable Max Current")),
-		ERROR_CODE(Doc.of(ErrorCodes.values()) //
-				.persistencePriority(PersistencePriority.HIGH) //
-				.text("Error Code")),
+		// Error Code bits, see chapter 6.2 "Troubleshooting table (IEC portfolio)" of the user manual
+		RESIDUAL_CURRENT_DETECTED(Doc.of(Level.FAULT) //
+				.text("There is residual current (30mA AC or 6mA DC) in the charge circuit. Current leaks into the ground")),
+		PE_MISSING_OR_SWAP_NEUTRAL_AND_PHASE(Doc.of(Level.FAULT) //
+				.text("The EVSE is not earthed correctly or neutral and phase wires are swapped")),
+		OVER_VOLTAGE(Doc.of(Level.FAULT) //
+				.text("The maximum voltage on the power input is too high")),
+		UNDER_VOLTAGE(Doc.of(Level.FAULT) //
+				.text("The voltage on the power input is not sufficient")),
+		OVER_CURRENT(Doc.of(Level.FAULT) //
+				.text("There is an overload on the EV side")),
+		SEVERE_OVER_CURRENT(Doc.of(Level.FAULT) //
+				.text("There is a severe overload on the EV side")),
+		OVER_TEMPERATURE(Doc.of(Level.FAULT) //
+				.text("The internal temperature is too high")),
+		POWER_RELAY_FAULT(Doc.of(Level.FAULT) //
+				.text("The relay contact is detected in wrong state or has damage")),
+		INTERNAL_COMMUNICATION_FAILURE(Doc.of(Level.FAULT) //
+				.text("The internal boards of the EVSE fail to communicate with each other")),
+		E_LOCK_FAILURE(Doc.of(Level.FAULT) //
+				.text("Error to lock / unlock the charge connector")),
+		MISSING_PHASE(Doc.of(Level.FAULT) //
+				.text("One or more phases are missing")),
+		MODBUS_COMMUNICATION_LOST(Doc.of(Level.FAULT) //
+				.text("The Modbus communication is lost")),
 		SOCKET_LOCK_STATE(Doc.of(LockState.values()) //
 				.persistencePriority(PersistencePriority.HIGH) //
 				.text("Socket Lock State")),
